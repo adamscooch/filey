@@ -1,0 +1,73 @@
+{
+  "name": "filey",
+  "version": "1.0.0",
+  "description": "Simple file compression, conversion, and manipulation tool",
+  "main": "electron-main.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "electron": "electron .",
+    "bundle": "bash bundle-tools.sh",
+    "build": "bash bundle-tools.sh && bash build-app.sh",
+    "build:quick": "bash build-app.sh",
+    "deploy:macbook": "scp dist/Filey-*.dmg adamanderson@adams-macbook-pro:~/Desktop/ && echo 'DMG copied to MacBook Pro Desktop'",
+    "deploy:macmini": "scp server.js package.json adamanderson@adams-mac-mini:~/Documents/Code/Filey/ && scp public/app.js public/index.html public/style.css adamanderson@adams-mac-mini:~/Documents/Code/Filey/public/ && echo 'Deployed to Mac Mini (restart manually with npm start)'"
+  },
+  "dependencies": {
+    "exiftool-vendored": "^35.13.1",
+    "express": "^4.21.0",
+    "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "electron": "^35.7.5",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "afterPack": "./afterPack.js",
+    "appId": "com.filey.app",
+    "productName": "Filey",
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon.icns",
+      "hardenedRuntime": false
+    },
+    "files": [
+      "electron-main.js",
+      "server.js",
+      "public/**/*",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "bin",
+        "to": "bin",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "dmg": {
+      "title": "Filey",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
+  }
+}
