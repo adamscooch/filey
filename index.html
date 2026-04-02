@@ -21,7 +21,7 @@
       </svg>
       <h1>Filey</h1>
     </div>
-    <p class="subtitle">Your file toolkit. Drop and go.<span class="version" id="app-version"></span></p>
+    <p class="subtitle">Your file toolkit. Drop and go.<span class="version">v260315.5</span></p>
 
     <div class="tools-grid">
 
@@ -41,7 +41,7 @@
           <div class="control-row">
             <label><span class="label-text">Output Format</span>
               <select id="ic-format">
-                <option value="auto">Original Format</option>
+                <option value="auto">Auto</option>
                 <option value="jpg">JPG</option>
                 <option value="png">PNG</option>
                 <option value="webp">WebP</option>
@@ -72,7 +72,11 @@
             <span class="source-res-label">Source:</span>
             <span class="source-res-value" id="ic-source-res-value"></span>
           </div>
-          <div class="ic-format-hint hidden" id="ic-format-hint"></div>
+          <div class="control-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="ic-strip-meta" checked>
+              Strip metadata            </label>
+          </div>
           <div class="compression-mode-toggle">
             <button type="button" class="mode-btn active" data-mode="quality">Quality</button>
             <button type="button" class="mode-btn" data-mode="target">Target Size</button>
@@ -87,10 +91,7 @@
             <label>Target Size
               <div class="size-input-group">
                 <input type="number" id="ic-target" placeholder="e.g. 500" min="1" max="512000">
-                <select class="size-unit-toggle">
-                  <option value="KB">KB</option>
-                  <option value="MB">MB</option>
-                </select>
+                <button type="button" class="size-unit-toggle" data-unit="KB">KB</button>
               </div>
               <span class="target-helper">Compresses to fit within this file size</span>
             </label>
@@ -151,30 +152,6 @@
               </select>
             </label>
           </div>
-          <div class="control-row">
-            <label><span class="label-text">Codec</span>
-              <select id="vc-codec">
-                <option value="auto">Auto</option>
-                <option value="h264">H.264</option>
-                <option value="h265">H.265</option>
-                <option value="h264_hw">H.264 (Fast/HW)</option>
-                <option value="h265_hw">H.265 (Fast/HW)</option>
-                <option value="av1">AV1</option>
-              </select>
-            </label>
-            <label><span class="label-text">Audio</span>
-              <select id="vc-audio">
-                <option value="auto">Auto (128k)</option>
-                <option value="passthrough">Keep Original</option>
-                <option value="aac_64k">AAC 64k</option>
-                <option value="aac_96k">AAC 96k</option>
-                <option value="aac_192k">AAC 192k</option>
-                <option value="aac_256k">AAC 256k</option>
-                <option value="aac_320k">AAC 320k</option>
-                <option value="none">No Audio</option>
-              </select>
-            </label>
-          </div>
           <div class="control-row vc-custom-res hidden" id="vc-custom-res-row">
             <label>Width (px)
               <input type="number" id="vc-custom-width" placeholder="1920" min="100" max="7680">
@@ -184,23 +161,6 @@
             <span class="source-res-label">Source:</span>
             <span class="source-res-value" id="vc-source-res-value"></span>
           </div>
-          <details class="advanced-section">
-            <summary>Advanced</summary>
-            <div class="control-row">
-              <label><span class="label-text">Trim Start</span>
-                <input type="text" id="vc-trim-start" placeholder="0:00" class="time-input">
-              </label>
-              <label><span class="label-text">Trim End</span>
-                <input type="text" id="vc-trim-end" placeholder="end" class="time-input">
-              </label>
-            </div>
-            <div class="control-row">
-              <label class="checkbox-label">
-                <input type="checkbox" id="vc-denoise">
-                Denoise (reduces file size)
-              </label>
-            </div>
-          </details>
           <div class="compression-mode-toggle">
             <button type="button" class="mode-btn active" data-mode="quality">Quality</button>
             <button type="button" class="mode-btn" data-mode="target">Target Size</button>
@@ -215,10 +175,7 @@
             <label>Target Size
               <div class="size-input-group">
                 <input type="number" id="vc-target" placeholder="e.g. 10" min="1" max="512000">
-                <select class="size-unit-toggle">
-                  <option value="KB">KB</option>
-                  <option value="MB" selected>MB</option>
-                </select>
+                <button type="button" class="size-unit-toggle" data-unit="MB">MB</button>
               </div>
               <span class="target-helper">Uses 2-pass encoding to hit this file size</span>
             </label>
@@ -231,10 +188,6 @@
                 <span class="suffix-preview">.mp4</span>
               </div>
             </label>
-          </div>
-          <div class="vc-estimate hidden" id="vc-estimate">
-            <span class="estimate-label">Estimated:</span>
-            <span class="estimate-value" id="vc-estimate-value"></span>
           </div>
           <div class="tool-warning hidden"></div>
           <button class="tool-go-btn">Compress</button>
@@ -285,23 +238,6 @@
               <input type="number" id="gm-custom-width" placeholder="480" min="100" max="1920">
             </label>
           </div>
-          <details class="advanced-section">
-            <summary>Advanced</summary>
-            <div class="control-row">
-              <label><span class="label-text">Trim Start</span>
-                <input type="text" id="gm-trim-start" placeholder="0:00" class="time-input">
-              </label>
-              <label><span class="label-text">Trim End</span>
-                <input type="text" id="gm-trim-end" placeholder="end" class="time-input">
-              </label>
-            </div>
-            <div class="control-row">
-              <label class="checkbox-label">
-                <input type="checkbox" id="gm-bounce">
-                Bounce (play forward then backward)
-              </label>
-            </div>
-          </details>
           <div class="compression-mode-toggle">
             <button type="button" class="mode-btn active" data-mode="quality">Quality</button>
             <button type="button" class="mode-btn" data-mode="target">Target Size</button>
@@ -316,10 +252,7 @@
             <label>Target Size
               <div class="size-input-group">
                 <input type="number" id="gm-target" placeholder="e.g. 5" min="1" max="102400">
-                <select class="size-unit-toggle">
-                  <option value="KB">KB</option>
-                  <option value="MB" selected>MB</option>
-                </select>
+                <button type="button" class="size-unit-toggle" data-unit="MB">MB</button>
               </div>
               <span class="target-helper">Reduces color palette to fit this size</span>
             </label>
@@ -344,58 +277,11 @@
         <div class="tool-results hidden"></div>
       </div>
 
-      <!-- PDF Compressor -->
-      <div class="tool-card" id="tool-pdf-compressor">
-        <div class="tool-header">
-          <span class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h4" opacity="0.5"/></svg></span>
-          <span class="tool-title">PDF Compressor</span>
-        </div>
-        <div class="tool-dropzone">
-          <p>Drop PDF files</p>
-          <span class="browse-btn">Browse</span>
-          <input type="file" accept=".pdf,application/pdf" multiple hidden>
-        </div>
-        <div class="tool-file-list hidden"></div>
-        <div class="tool-controls hidden">
-          <div class="control-row">
-            <label><span class="label-text">Compression Level</span>
-              <select id="pdf-quality">
-                <option value="medium" selected>Medium (150 DPI)</option>
-                <option value="low">Low (72 DPI, smallest)</option>
-                <option value="high">High (300 DPI)</option>
-                <option value="lossless">Lossless (preserve quality)</option>
-              </select>
-            </label>
-          </div>
-          <div class="control-row">
-            <label><span class="label-text">File Name Suffix</span>
-              <div class="suffix-input-group">
-                <span class="suffix-preview">filename</span>
-                <input type="text" class="suffix-input" value="-filey" placeholder="-filey">
-                <span class="suffix-preview">.pdf</span>
-              </div>
-            </label>
-          </div>
-          <div class="pdf-estimate hidden" id="pdf-estimate">
-            <span class="estimate-label">Estimated:</span>
-            <span class="estimate-value" id="pdf-estimate-value"></span>
-          </div>
-          <div class="tool-warning hidden"></div>
-          <button class="tool-go-btn">Compress</button>
-        </div>
-        <div class="tool-progress hidden">
-          <div class="spinner"></div>
-          <p class="progress-text">Compressing PDF...</p>
-          <p class="batch-counter hidden"></p>
-        </div>
-        <div class="tool-results hidden"></div>
-      </div>
-
-      <!-- Audio & Video Transcriber -->
+      <!-- Video Transcriber -->
       <div class="tool-card" id="tool-video-transcriber">
         <div class="tool-header">
           <span class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18v3M8 21h8"/><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M7 10h2M11 10h2M15 10h2M8 13h8" opacity="0.5"/></svg></span>
-          <span class="tool-title">Audio & Video Transcriber</span>
+          <span class="tool-title">Video Transcriber</span>
         </div>
         <div class="tool-dropzone">
           <p>Drop video or audio files</p>
@@ -441,7 +327,7 @@
             <label><span class="label-text">File Name Suffix</span>
               <div class="suffix-input-group">
                 <span class="suffix-preview">filename</span>
-                <input type="text" class="suffix-input" value="-filey-transcript" placeholder="-filey-transcript">
+                <input type="text" class="suffix-input" value="-transcript" placeholder="-transcript">
                 <span class="suffix-preview">.txt</span>
               </div>
             </label>
@@ -457,50 +343,9 @@
         <div class="tool-results hidden"></div>
       </div>
 
-      <!-- SVG Optimizer -->
-      <div class="tool-card" id="tool-svg-optimizer">
-        <div class="tool-header">
-          <span class="tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg></span>
-          <span class="tool-title">SVG Optimizer</span>
-        </div>
-        <div class="tool-dropzone">
-          <p>Drop SVG files</p>
-          <span class="browse-btn">Browse</span>
-          <input type="file" accept=".svg,image/svg+xml" multiple hidden>
-        </div>
-        <div class="tool-file-list hidden"></div>
-        <div class="tool-controls hidden">
-          <div class="svg-info">
-            <span class="estimate-label">Removes unused data, simplifies paths, and minifies markup. Typically saves 30-60%.</span>
-          </div>
-          <div class="control-row">
-            <label><span class="label-text">File Name Suffix</span>
-              <div class="suffix-input-group">
-                <span class="suffix-preview">filename</span>
-                <input type="text" class="suffix-input" value="-filey" placeholder="-filey">
-                <span class="suffix-preview">.svg</span>
-              </div>
-            </label>
-          </div>
-          <div class="tool-warning hidden"></div>
-          <button class="tool-go-btn">Optimize</button>
-        </div>
-        <div class="tool-progress hidden">
-          <div class="spinner"></div>
-          <p class="progress-text">Optimizing...</p>
-          <p class="batch-counter hidden"></p>
-        </div>
-        <div class="tool-results hidden"></div>
-      </div>
-
     </div>
   </div>
 
   <script src="app.js"></script>
-  <script>
-    fetch("/api/version").then(r => r.json()).then(d => {
-      document.getElementById("app-version").textContent = "v" + d.version;
-    }).catch(() => {});
-  </script>
 </body>
 </html>

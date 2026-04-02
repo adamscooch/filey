@@ -8,6 +8,12 @@ const { exiftool } = require("exiftool-vendored");
 
 const app = express();
 const PORT = 3456;
+// Version: package.json uses semver YY.MDD.N (e.g. 26.402.1)
+// Display format: YYMMDD.N (e.g. 260402.1)
+const PKG_VERSION = require("./package.json").version;
+const APP_VERSION = PKG_VERSION.replace(/^(\d+)\.(\d+)\.(\d+)$/, (_, yy, mdd, n) =>
+  `${yy}${mdd.padStart(4, "0")}.${n}`
+);
 
 // Bundled binary directory (set by Electron or bundle-tools.sh)
 const FILEY_BIN = process.env.FILEY_BIN_DIR || path.join(__dirname, "bin");
@@ -1745,6 +1751,10 @@ try {
   HAS_FFMPEG = true;
 } catch (_) {}
 
+app.get("/api/version", (req, res) => {
+  res.json({ version: APP_VERSION });
+});
+
 app.get("/api/status", (req, res) => {
   const tools = {
     // Core
@@ -1772,7 +1782,7 @@ app.get("/api/status", (req, res) => {
   const allOptional = optimCount + (tools.gifsicle ? 1 : 0) + (tools.gifski ? 1 : 0) + (tools.svgo ? 1 : 0) + (tools.whisper ? 1 : 0);
 
   res.json({
-    version: "v260315.12",
+    version: `v${APP_VERSION}`,
     tools,
     summary: {
       coreOk,

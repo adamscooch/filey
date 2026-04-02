@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require("electron");
+const { app, BrowserWindow, shell, dialog } = require("electron");
 const path = require("path");
 
 // Determine if running from packaged app or dev
@@ -38,12 +38,66 @@ function createWindow() {
   });
 }
 
+// --- Auto-updater ---
+function setupAutoUpdater() {
+  if (!isPackaged) return; // Skip in dev
+
+  const { autoUpdater } = require("electron-updater");
+
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("update-available", (info) => {
+    dialog
+      .showMessageBox(mainWindow, {
+        type: "info",
+        title: "Update Available",
+        message: `Filey v${info.version} is available (you have v${app.getVersion()}).`,
+        buttons: ["Download & Install", "Later"],
+        defaultId: 0,
+      })
+      .then((result) => {
+        if (result.response === 0) {
+          autoUpdater.downloadUpdate();
+        }
+      });
+  });
+
+  autoUpdater.on("update-downloaded", () => {
+    dialog
+      .showMessageBox(mainWindow, {
+        type: "info",
+        title: "Update Ready",
+        message: "Update downloaded. Filey will restart to install it.",
+        buttons: ["Restart Now", "Later"],
+        defaultId: 0,
+      })
+      .then((result) => {
+        if (result.response === 0) {
+          autoUpdater.quitAndInstall();
+        }
+      });
+  });
+
+  autoUpdater.on("error", (err) => {
+    console.log("Auto-updater error:", err.message);
+  });
+
+  // Check for updates 3 seconds after launch
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch(() => {});
+  }, 3000);
+}
+
 app.whenReady().then(() => {
   // Start Express server in-process
   require("./server.js");
 
   // Give server a moment to bind
-  setTimeout(createWindow, 500);
+  setTimeout(() => {
+    createWindow();
+    setupAutoUpdater();
+  }, 500);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

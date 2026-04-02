@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -lh /Users/adamanderson/Documents/Code/Filey/Filey.app/Contents/Resources/*.icns)",
+      "Bash(ffmpeg -version)",
+      "Bash(ffmpeg -filters)",
+      "Bash(npm install sharp)",
+      "Bash(osadecompile /Users/adamanderson/Documents/Code/Filey/Filey.app/Contents/Resources/Scripts/main.scpt)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:imageoptim.com)"
+    ]
+  }
+}
