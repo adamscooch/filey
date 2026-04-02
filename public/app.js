@@ -195,10 +195,15 @@ class ToolCard {
     const locating = validFiles.map(async (f) => {
       try {
         // Use path from drag event if available (instant, no search needed)
-        const knownPath = dragPaths[f.name];
-        const diskPath = knownPath
-          ? await verifyPath(knownPath, f.name, f.size)
-          : await locateFile(f.name, f.size);
+        // Electron sets file.path directly on File objects from drag events
+        const electronPath = f.path;
+        const knownPath = electronPath || dragPaths[f.name];
+        // Trust Electron paths directly (no verify roundtrip needed)
+        const diskPath = electronPath
+          ? electronPath
+          : knownPath
+            ? await verifyPath(knownPath, f.name, f.size)
+            : await locateFile(f.name, f.size);
         this.pendingFiles.push({ name: f.name, size: f.size, path: diskPath });
         return { name: f.name, size: f.size, path: diskPath };
       } catch (err) {
