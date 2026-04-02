@@ -71,6 +71,17 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Draggable title bar region for Electron (macOS frameless window) */
+.titlebar-drag {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 38px;
+  -webkit-app-region: drag;
+  z-index: 9999;
+}
+
 /* ---- Container ---- */
 .container {
   width: 100%;

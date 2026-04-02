@@ -1173,36 +1173,19 @@ async function compressPdf(inputPath, quality = "medium", suffix = "-filey") {
 
 // --- SVG Optimizer ---
 
-// Auto-detect svgo
-let SVGO_BIN = null;
-const svgoBundled = path.join(FILEY_BIN, "svgo");
-try { if (fs.statSync(svgoBundled)) SVGO_BIN = svgoBundled; } catch (_) {}
-if (!SVGO_BIN) {
-  try {
-    const svgoPath = require("child_process").execFileSync("which", ["svgo"]).toString().trim();
-    if (svgoPath) SVGO_BIN = svgoPath;
-  } catch (_) {}
-}
+const { optimize: svgoOptimize } = require("svgo");
+const SVGO_AVAILABLE = true;
 
 async function optimizeSvg(inputPath, suffix = "-filey") {
-  if (!SVGO_BIN) throw new Error("svgo not installed. Run: npm install -g svgo");
-
   const ext = path.extname(inputPath);
   const baseName = path.basename(inputPath, ext);
   const dir = path.dirname(inputPath);
   const outputPath = path.join(dir, `${baseName}${suffix}.svg`);
   const originalSize = fs.statSync(inputPath).size;
 
-  await new Promise((resolve, reject) => {
-    execFile(SVGO_BIN, [
-      "--input", inputPath,
-      "--output", outputPath,
-      "--multipass",
-    ], { timeout: 30000 }, (err) => {
-      if (err) reject(new Error(`svgo failed: ${err.message}`));
-      else resolve();
-    });
-  });
+  const input = fs.readFileSync(inputPath, "utf-8");
+  const result = svgoOptimize(input, { multipass: true });
+  fs.writeFileSync(outputPath, result.data);
 
   const outputSize = fs.statSync(outputPath).size;
   const savedPercent = Math.round((1 - outputSize / originalSize) * 100);
@@ -1770,7 +1753,7 @@ app.get("/api/status", (req, res) => {
     gifsicle: !!OPTIM_TOOLS["gifsicle"],
     gifski: !!OPTIM_TOOLS["gifski"],
     // SVG
-    svgo: !!SVGO_BIN,
+    svgo: SVGO_AVAILABLE,
     // PDF
     ghostscript: !!GS_BIN,
     // Transcription

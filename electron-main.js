@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, dialog } = require("electron");
+const { app, BrowserWindow, shell, dialog, Menu } = require("electron");
 const path = require("path");
 
 // Determine if running from packaged app or dev
@@ -12,6 +12,7 @@ process.env.FILEY_BIN_DIR = bundledBinDir;
 
 const PORT = 3456;
 let mainWindow;
+let updater = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -38,11 +39,75 @@ function createWindow() {
   });
 }
 
+// --- App Menu with Check for Updates ---
+function buildMenu() {
+  const pkg = require("./package.json");
+  const displayVersion = pkg.version.replace(/^(\d+)\.(\d+)\.(\d+)$/, (_, yy, mdd, n) =>
+    `${yy}${mdd.padStart(4, "0")}.${n}`
+  );
+
+  const template = [
+    {
+      label: app.name,
+      submenu: [
+        { label: `About Filey (v${displayVersion})`, role: "about" },
+        { type: "separator" },
+        {
+          label: "Check for Updates...",
+          click: () => checkForUpdatesManual(),
+        },
+        { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit" },
+      ],
+    },
+    {
+      label: "Edit",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "selectAll" },
+      ],
+    },
+    {
+      label: "View",
+      submenu: [
+        { role: "reload" },
+        { role: "toggleDevTools" },
+        { type: "separator" },
+        { role: "resetZoom" },
+        { role: "zoomIn" },
+        { role: "zoomOut" },
+        { type: "separator" },
+        { role: "togglefullscreen" },
+      ],
+    },
+    {
+      label: "Window",
+      submenu: [
+        { role: "minimize" },
+        { role: "zoom" },
+        { role: "close" },
+      ],
+    },
+  ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 // --- Auto-updater ---
 function setupAutoUpdater() {
-  if (!isPackaged) return; // Skip in dev
+  if (!isPackaged) return;
 
   const { autoUpdater } = require("electron-updater");
+  updater = autoUpdater;
 
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
@@ -63,6 +128,17 @@ function setupAutoUpdater() {
       });
   });
 
+  autoUpdater.on("update-not-available", () => {
+    if (manualUpdateCheck) {
+      dialog.showMessageBox(mainWindow, {
+        type: "info",
+        title: "No Updates",
+        message: "Filey is up to date.",
+      });
+      manualUpdateCheck = false;
+    }
+  });
+
   autoUpdater.on("update-downloaded", () => {
     dialog
       .showMessageBox(mainWindow, {
@@ -81,12 +157,35 @@ function setupAutoUpdater() {
 
   autoUpdater.on("error", (err) => {
     console.log("Auto-updater error:", err.message);
+    if (manualUpdateCheck) {
+      dialog.showMessageBox(mainWindow, {
+        type: "error",
+        title: "Update Error",
+        message: `Could not check for updates: ${err.message}`,
+      });
+      manualUpdateCheck = false;
+    }
   });
 
-  // Check for updates 3 seconds after launch
+  // Auto-check 3 seconds after launch
   setTimeout(() => {
     autoUpdater.checkForUpdates().catch(() => {});
   }, 3000);
+}
+
+let manualUpdateCheck = false;
+
+function checkForUpdatesManual() {
+  if (!updater) {
+    dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title: "Updates",
+      message: "Auto-update is only available in the packaged app.",
+    });
+    return;
+  }
+  manualUpdateCheck = true;
+  updater.checkForUpdates().catch(() => {});
 }
 
 app.whenReady().then(() => {
@@ -95,6 +194,7 @@ app.whenReady().then(() => {
 
   // Give server a moment to bind
   setTimeout(() => {
+    buildMenu();
     createWindow();
     setupAutoUpdater();
   }, 500);
