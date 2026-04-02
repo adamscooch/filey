@@ -1,6 +1,6 @@
 {
   "name": "filey",
-  "version": "26.402.4",
+  "version": "26.402.5",
   "description": "Simple file compression, conversion, and manipulation tool",
   "main": "electron-main.js",
   "scripts": {
@@ -14,7 +14,6 @@
     "deploy:macbook": "scp dist/Filey-*.dmg adamanderson@adams-macbook-pro:~/Desktop/ && echo 'DMG copied to MacBook Pro Desktop'"
   },
   "dependencies": {
-    "electron-updater": "^6.8.3",
     "exiftool-vendored": "^35.13.1",
     "express": "^4.21.0",
     "sharp": "^0.34.5",

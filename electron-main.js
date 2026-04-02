@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, dialog, Menu } = require("electron");
+const { app, BrowserWindow, shell, dialog, Menu, net } = require("electron");
 const path = require("path");
 
 // Determine if running from packaged app or dev
@@ -12,7 +12,9 @@ process.env.FILEY_BIN_DIR = bundledBinDir;
 
 const PORT = 3456;
 let mainWindow;
-let updater = null;
+
+const GITHUB_OWNER = "adamscooch";
+const GITHUB_REPO = "filey";
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -39,22 +41,117 @@ function createWindow() {
   });
 }
 
-// --- App Menu with Check for Updates ---
-function buildMenu() {
+// --- Version helpers ---
+function getDisplayVersion() {
   const pkg = require("./package.json");
-  const displayVersion = pkg.version.replace(/^(\d+)\.(\d+)\.(\d+)$/, (_, yy, mdd, n) =>
+  return pkg.version.replace(/^(\d+)\.(\d+)\.(\d+)$/, (_, yy, mdd, n) =>
     `${yy}${mdd.padStart(4, "0")}.${n}`
   );
+}
 
+function semverToComparable(semver) {
+  const parts = semver.split(".").map(Number);
+  return parts[0] * 1000000 + parts[1] * 1000 + parts[2];
+}
+
+// --- Update checker (GitHub Releases) ---
+function checkForUpdates(manual) {
+  const currentSemver = require("./package.json").version;
+
+  const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
+
+  const request = net.request(url);
+  request.setHeader("User-Agent", "Filey-Updater");
+
+  let body = "";
+  request.on("response", (response) => {
+    response.on("data", (chunk) => { body += chunk.toString(); });
+    response.on("end", () => {
+      try {
+        const release = JSON.parse(body);
+        const tagName = release.tag_name || "";
+        // Tag is like "v260402.4", convert to semver-like for comparison
+        // Or it might already be semver in the release
+        const latestDisplay = tagName.replace(/^v/, "");
+
+        // Find the DMG asset
+        const dmgAsset = (release.assets || []).find(a => a.name.endsWith(".dmg"));
+
+        // Compare: convert display version (260402.4) to semver (26.402.4) for comparison
+        const latestParts = latestDisplay.match(/^(\d{2})(\d{4})\.(\d+)$/);
+        if (!latestParts) {
+          if (manual) showUpToDate();
+          return;
+        }
+        const latestSemver = `${latestParts[1]}.${parseInt(latestParts[2])}.${latestParts[3]}`;
+
+        const current = semverToComparable(currentSemver);
+        const latest = semverToComparable(latestSemver);
+
+        if (latest > current && dmgAsset) {
+          dialog
+            .showMessageBox(mainWindow, {
+              type: "info",
+              title: "Update Available",
+              message: `Filey v${latestDisplay} is available (you have v${getDisplayVersion()}).`,
+              detail: "This will download the installer. Drag Filey to Applications to update.",
+              buttons: ["Download Update", "Later"],
+              defaultId: 0,
+            })
+            .then((result) => {
+              if (result.response === 0) {
+                shell.openExternal(dmgAsset.browser_download_url);
+              }
+            });
+        } else if (manual) {
+          showUpToDate();
+        }
+      } catch (err) {
+        console.log("Update check failed:", err.message);
+        if (manual) {
+          dialog.showMessageBox(mainWindow, {
+            type: "error",
+            title: "Update Error",
+            message: `Could not check for updates: ${err.message}`,
+          });
+        }
+      }
+    });
+  });
+
+  request.on("error", (err) => {
+    console.log("Update check error:", err.message);
+    if (manual) {
+      dialog.showMessageBox(mainWindow, {
+        type: "error",
+        title: "Update Error",
+        message: `Could not check for updates: ${err.message}`,
+      });
+    }
+  });
+
+  request.end();
+}
+
+function showUpToDate() {
+  dialog.showMessageBox(mainWindow, {
+    type: "info",
+    title: "No Updates",
+    message: `Filey is up to date (v${getDisplayVersion()}).`,
+  });
+}
+
+// --- App Menu ---
+function buildMenu() {
   const template = [
     {
       label: app.name,
       submenu: [
-        { label: `About Filey (v${displayVersion})`, role: "about" },
+        { label: `About Filey (v${getDisplayVersion()})`, role: "about" },
         { type: "separator" },
         {
           label: "Check for Updates...",
-          click: () => checkForUpdatesManual(),
+          click: () => checkForUpdates(true),
         },
         { type: "separator" },
         { role: "hide" },
@@ -102,101 +199,16 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-// --- Auto-updater ---
-function setupAutoUpdater() {
-  if (!isPackaged) return;
-
-  const { autoUpdater } = require("electron-updater");
-  updater = autoUpdater;
-
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = true;
-
-  autoUpdater.on("update-available", (info) => {
-    dialog
-      .showMessageBox(mainWindow, {
-        type: "info",
-        title: "Update Available",
-        message: `Filey v${info.version} is available (you have v${app.getVersion()}).`,
-        buttons: ["Download & Install", "Later"],
-        defaultId: 0,
-      })
-      .then((result) => {
-        if (result.response === 0) {
-          autoUpdater.downloadUpdate();
-        }
-      });
-  });
-
-  autoUpdater.on("update-not-available", () => {
-    if (manualUpdateCheck) {
-      dialog.showMessageBox(mainWindow, {
-        type: "info",
-        title: "No Updates",
-        message: "Filey is up to date.",
-      });
-      manualUpdateCheck = false;
-    }
-  });
-
-  autoUpdater.on("update-downloaded", () => {
-    dialog
-      .showMessageBox(mainWindow, {
-        type: "info",
-        title: "Update Ready",
-        message: "Update downloaded. Filey will restart to install it.",
-        buttons: ["Restart Now", "Later"],
-        defaultId: 0,
-      })
-      .then((result) => {
-        if (result.response === 0) {
-          autoUpdater.quitAndInstall();
-        }
-      });
-  });
-
-  autoUpdater.on("error", (err) => {
-    console.log("Auto-updater error:", err.message);
-    if (manualUpdateCheck) {
-      dialog.showMessageBox(mainWindow, {
-        type: "error",
-        title: "Update Error",
-        message: `Could not check for updates: ${err.message}`,
-      });
-      manualUpdateCheck = false;
-    }
-  });
-
-  // Auto-check 3 seconds after launch
-  setTimeout(() => {
-    autoUpdater.checkForUpdates().catch(() => {});
-  }, 3000);
-}
-
-let manualUpdateCheck = false;
-
-function checkForUpdatesManual() {
-  if (!updater) {
-    dialog.showMessageBox(mainWindow, {
-      type: "info",
-      title: "Updates",
-      message: "Auto-update is only available in the packaged app.",
-    });
-    return;
-  }
-  manualUpdateCheck = true;
-  updater.checkForUpdates().catch(() => {});
-}
-
 app.whenReady().then(() => {
-  // Start Express server in-process
   require("./server.js");
 
-  // Give server a moment to bind
   setTimeout(() => {
     buildMenu();
     createWindow();
-    setupAutoUpdater();
+    // Auto-check for updates 3 seconds after launch
+    if (isPackaged) {
+      setTimeout(() => checkForUpdates(false), 3000);
+    }
   }, 500);
 
   app.on("activate", () => {
