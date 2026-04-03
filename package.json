@@ -11,7 +11,7 @@
     "build": "bash bundle-tools.sh && bash build-app.sh",
     "build:quick": "bash build-app.sh",
     "release": "bash release.sh",
-    "deploy:macbook": "scp dist/Filey-*.dmg adamanderson@adams-macbook-pro:~/Desktop/ && echo 'DMG copied to MacBook Pro Desktop'"
+    "deploy:macbook": "bash deploy-macbook.sh"
   },
   "dependencies": {
     "exiftool-vendored": "^35.13.1",
