@@ -86,7 +86,7 @@ body {
 /* ---- Container ---- */
 .container {
   width: 100%;
-  max-width: 1140px;
+  max-width: 780px;
   padding: 16px 32px 20px;
   text-align: center;
 }
@@ -165,7 +165,7 @@ h1 {
 /* ---- Tools Grid ---- */
 .tools-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 12px;
 }
 

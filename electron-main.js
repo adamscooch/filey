@@ -16,8 +16,8 @@ let mainWindow;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 900,
+    width: 840,
+    height: 720,
     title: "Filey",
     titleBarStyle: "hiddenInset",
     backgroundColor: "#171411",
