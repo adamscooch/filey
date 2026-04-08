@@ -1048,7 +1048,10 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 /* ---- Estimate Display ---- */
-.ic-estimate {
+.ic-estimate,
+.vc-estimate,
+.pdf-estimate,
+.gif-estimate {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1107,15 +1110,15 @@ input[type="number"]::-webkit-outer-spin-button {
   right: 0;
   bottom: 0;
   z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   clip-path: inset(0 0 0 50%);
 }
 
 .comparison-container .comp-after {
-  max-width: 100%;
+  display: block;
+  width: 100%;
   max-height: 300px;
+  object-fit: contain;
+  margin: 0 auto;
 }
 
 .comparison-divider {
@@ -1176,6 +1179,92 @@ input[type="number"]::-webkit-outer-spin-button {
   padding: 3px 8px;
   border-radius: 4px;
   backdrop-filter: blur(4px);
+}
+
+/* --- Maximize button on comparison --- */
+.comp-maximize-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  z-index: 5;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 5px 7px;
+  color: var(--text-primary);
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: background 0.2s, border-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.comp-maximize-btn:hover {
+  background: rgba(0, 0, 0, 0.7);
+  border-color: var(--accent);
+}
+
+/* --- Fullscreen comparison modal --- */
+.comp-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.comp-modal:not(.hidden) {
+  opacity: 1;
+}
+
+.comp-modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+}
+
+.comp-modal-content {
+  position: relative;
+  width: 90vw;
+  max-width: 1200px;
+  max-height: 85vh;
+}
+
+.comp-modal-close {
+  position: absolute;
+  top: -36px;
+  right: 0;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 28px;
+  cursor: pointer;
+  z-index: 10;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.comp-modal-close:hover {
+  opacity: 1;
+}
+
+.comp-modal-slider {
+  max-height: 85vh;
+}
+
+.comp-modal-slider img {
+  max-height: 85vh;
 }
 
 /* --- Transcript result --- */

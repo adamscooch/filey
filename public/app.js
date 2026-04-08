@@ -422,16 +422,25 @@ class ToolCard {
   }
 
   reset() {
-    this.pendingFiles = [];
-    this.fileList.textContent = "";
-    this.fileList.classList.add("hidden");
-    this.controls.classList.add("hidden");
-    this.results.classList.add("hidden");
-    this.results.textContent = "";
-    this.progress.classList.add("hidden");
-    this.dropzone.classList.remove("dropzone-mini");
-    this.hideWarning();
-    this.goBtn.disabled = false;
+    // Smooth fade-out before resetting
+    this.results.style.transition = "opacity 0.25s ease, transform 0.25s ease";
+    this.results.style.opacity = "0";
+    this.results.style.transform = "translateY(8px)";
+    setTimeout(() => {
+      this.pendingFiles = [];
+      this.fileList.textContent = "";
+      this.fileList.classList.add("hidden");
+      this.controls.classList.add("hidden");
+      this.results.classList.add("hidden");
+      this.results.textContent = "";
+      this.results.style.opacity = "";
+      this.results.style.transform = "";
+      this.results.style.transition = "";
+      this.progress.classList.add("hidden");
+      this.dropzone.classList.remove("dropzone-mini");
+      this.hideWarning();
+      this.goBtn.disabled = false;
+    }, 250);
   }
 }
 
@@ -483,6 +492,9 @@ function renderResult(r, isSingleFile) {
         <span>Before</span>
         <span>After</span>
       </div>
+      <button class="comp-maximize-btn" data-orig="${escapeAttr(origSrc)}" data-out="${escapeAttr(outSrc)}" title="Fullscreen comparison">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="10 2 14 2 14 6"/><polyline points="6 14 2 14 2 10"/><line x1="14" y1="2" x2="9" y2="7"/><line x1="2" y1="14" x2="7" y2="9"/></svg>
+      </button>
     </div>`;
   }
 
@@ -909,8 +921,13 @@ function getGifWidth() {
 
 // --- Comparison slider ---
 
+const _initializedSliders = new WeakSet();
+
 function initComparisonSliders() {
   document.querySelectorAll(".comparison-container").forEach((container) => {
+    if (_initializedSliders.has(container)) return;
+    _initializedSliders.add(container);
+
     let dragging = false;
 
     function updatePosition(clientX) {
@@ -954,6 +971,46 @@ function initComparisonSliders() {
     });
   });
 }
+
+// --- Comparison modal ---
+
+function openComparisonModal(origSrc, outSrc) {
+  const modal = document.getElementById("comp-modal");
+  if (!modal) return;
+  document.getElementById("comp-modal-before").src = origSrc;
+  document.getElementById("comp-modal-after").src = outSrc;
+  modal.classList.remove("hidden");
+  // Reset slider position
+  const container = modal.querySelector(".comp-modal-slider");
+  container.dataset.position = 50;
+  container.querySelector(".comp-after-wrap").style.clipPath = "inset(0 0 0 50%)";
+  container.querySelector(".comparison-divider").style.left = "50%";
+  container.querySelector(".comparison-handle").style.left = "50%";
+  // Init slider interaction for the modal
+  initComparisonSliders();
+}
+
+function closeComparisonModal() {
+  const modal = document.getElementById("comp-modal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+}
+
+document.addEventListener("click", (e) => {
+  const maxBtn = e.target.closest(".comp-maximize-btn");
+  if (maxBtn) {
+    e.stopPropagation();
+    openComparisonModal(maxBtn.dataset.orig, maxBtn.dataset.out);
+    return;
+  }
+  if (e.target.closest(".comp-modal-close") || e.target.closest(".comp-modal-backdrop")) {
+    closeComparisonModal();
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeComparisonModal();
+});
 
 // --- Dynamic button labels ---
 
@@ -1024,6 +1081,7 @@ function updateVideoButtonLabel() {
 // --- Estimated file size (image tool only) ---
 
 let estimateTimer = null;
+let estimateGeneration = 0;
 
 function scheduleEstimate() {
   clearTimeout(estimateTimer);
@@ -1047,6 +1105,7 @@ function scheduleEstimate() {
   estimateVal.textContent = "calculating...";
   estimateEl.classList.remove("hidden");
 
+  const thisGeneration = ++estimateGeneration;
   estimateTimer = setTimeout(async () => {
     try {
       const scaleVal = document.getElementById("ic-scale")?.value;
@@ -1062,34 +1121,54 @@ function scheduleEstimate() {
       const quality = parseInt(document.querySelector("#tool-image-converter .quality-slider")?.value) || 85;
       const format = document.getElementById("ic-format")?.value || "auto";
 
-      const res = await fetch("/api/estimate-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          filePath: imageCard.pendingFiles[0].path,
-          outputFormat: format,
-          quality: quality,
-          resize: resize,
-        }),
-      });
+      // Estimate all files in batch
+      const files = imageCard.pendingFiles;
+      let totalOriginal = 0;
+      let totalEstimated = 0;
+      const perFileEstimates = [];
 
-      const data = await res.json();
-      if (data.error) {
+      for (const file of files) {
+        if (thisGeneration !== estimateGeneration) return; // stale request
+        const res = await fetch("/api/estimate-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filePath: file.path,
+            outputFormat: format,
+            quality: quality,
+            resize: resize,
+          }),
+        });
+
+        const data = await res.json();
+        if (data.error) continue;
+
+        const estBytes = data.optimizedEstimate || data.estimatedBytes;
+        totalOriginal += file.size;
+        totalEstimated += estBytes;
+        perFileEstimates.push({ name: file.name, original: file.size, estimated: estBytes });
+      }
+
+      if (thisGeneration !== estimateGeneration) return; // stale request
+
+      if (perFileEstimates.length === 0) {
         estimateEl.classList.add("hidden");
         return;
       }
 
-      const originalSize = imageCard.pendingFiles[0]?.size;
-      const beforeStr = originalSize ? formatSize(originalSize) + " → " : "";
-      const estBytes = data.optimizedEstimate || data.estimatedBytes;
-      // If estimate is same as or larger than original, show helpful message
-      if (originalSize && estBytes >= originalSize * 0.95) {
-        estimateVal.textContent = `${beforeStr}~${formatSize(estBytes)} (minimal change at this quality)`;
+      if (files.length === 1) {
+        const beforeStr = formatSize(totalOriginal) + " → ";
+        if (totalEstimated >= totalOriginal * 0.95) {
+          estimateVal.textContent = `${beforeStr}~${formatSize(totalEstimated)} (minimal change at this quality)`;
+        } else {
+          estimateVal.textContent = `${beforeStr}~${formatSize(totalEstimated)}`;
+        }
       } else {
-        estimateVal.textContent = `${beforeStr}~${formatSize(estBytes)}`;
+        const beforeStr = formatSize(totalOriginal) + " → ";
+        estimateVal.textContent = `${beforeStr}~${formatSize(totalEstimated)} (${files.length} files)`;
       }
     } catch (_) {
-      estimateEl.classList.add("hidden");
+      if (thisGeneration === estimateGeneration) estimateEl.classList.add("hidden");
     }
   }, 500);
 }
@@ -1150,6 +1229,35 @@ function schedulePdfEstimate() {
   const estimated = Math.round(originalSize * ratio);
   const beforeStr = formatSize(originalSize) + " → ";
   estimateVal.textContent = `${beforeStr}~${formatSize(estimated)}`;
+  estimateEl.classList.remove("hidden");
+}
+
+// --- GIF estimate ---
+function scheduleGifEstimate() {
+  const estimateEl = document.getElementById("gif-estimate");
+  const estimateVal = document.getElementById("gif-estimate-value");
+  if (!estimateEl || !estimateVal) return;
+  if (!gifCard?.pendingFiles?.length) { estimateEl.classList.add("hidden"); return; }
+  if (gifCard.getCompressionMode() === "target") { estimateEl.classList.add("hidden"); return; }
+
+  const originalSize = gifCard.pendingFiles[0]?.size;
+  if (!originalSize) { estimateEl.classList.add("hidden"); return; }
+
+  // GIF estimates are very rough — based on width, fps, and colors
+  const width = getGifWidth();
+  const fps = parseInt(document.getElementById("gm-fps")?.value) || 10;
+  const colors = parseInt(document.querySelector("#tool-gif-maker .quality-slider")?.value) || 256;
+
+  // Rough heuristic: GIF size scales with width^2 * fps * (colors/256)
+  // Base ratio at 480px/10fps/256colors is ~0.15 of video size
+  const widthRatio = (width / 480) * (width / 480);
+  const fpsRatio = fps / 10;
+  const colorRatio = colors / 256;
+  const baseRatio = 0.15;
+  const estimated = Math.round(originalSize * baseRatio * widthRatio * fpsRatio * colorRatio);
+
+  const beforeStr = formatSize(originalSize) + " → ";
+  estimateVal.textContent = `${beforeStr}~${formatSize(estimated)} (rough estimate)`;
   estimateEl.classList.remove("hidden");
 }
 
@@ -1364,6 +1472,9 @@ const gifCard = new ToolCard({
     f.type.startsWith("video/") ||
     /\.(mp4|mov|avi|mkv|webm)$/i.test(f.name),
   apiEndpoint: "/api/process-gif",
+  onFilesReady: () => {
+    scheduleGifEstimate();
+  },
   getPayload: (card, file) => {
     const mode = card.getCompressionMode();
 
@@ -1533,6 +1644,14 @@ document.querySelectorAll("#tool-video-converter .mode-btn").forEach((btn) => {
 
 // PDF estimate triggers
 document.getElementById("pdf-quality")?.addEventListener("change", schedulePdfEstimate);
+
+// GIF estimate triggers
+document.getElementById("gm-fps")?.addEventListener("change", scheduleGifEstimate);
+document.getElementById("gm-width-preset")?.addEventListener("change", scheduleGifEstimate);
+document.querySelector("#tool-gif-maker .quality-slider")?.addEventListener("input", scheduleGifEstimate);
+document.querySelectorAll("#tool-gif-maker .mode-btn").forEach((btn) => {
+  btn.addEventListener("click", () => setTimeout(scheduleGifEstimate, 10));
+});
 
 // Trigger estimate when files are added (extend onFilesReady)
 const origImageOnFilesReady = imageCard.config.onFilesReady;

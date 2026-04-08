@@ -19,6 +19,22 @@ const APP_VERSION = PKG_VERSION.replace(/^(\d+)\.(\d+)\.(\d+)$/, (_, yy, mdd, n)
 const FILEY_BIN = process.env.FILEY_BIN_DIR || path.join(__dirname, "bin");
 const FILEY_LIB = path.join(FILEY_BIN, "lib");
 
+// Content Security Policy
+app.use((req, res, next) => {
+  res.setHeader("Content-Security-Policy", [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data:",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "frame-ancestors 'none'",
+  ].join("; "));
+  next();
+});
+
 app.use(express.static(path.join(__dirname, "public")));
 app.use(express.json({ limit: "1mb" }));
 
@@ -95,7 +111,9 @@ function deepFindFile(fileName, fileSize) {
 
 function mdfindByExactName(fileName) {
   return new Promise((resolve) => {
-    execFile("mdfind", [`kMDItemFSName == '${fileName}'`], (err, stdout) => {
+    // Escape single quotes in filename to prevent Spotlight query injection
+    const escaped = fileName.replace(/'/g, "'\\''");
+    execFile("mdfind", [`kMDItemFSName == '${escaped}'`], (err, stdout) => {
       resolve((!err && stdout) ? stdout.trim().split("\n").filter(Boolean) : []);
     });
   });
@@ -1339,6 +1357,9 @@ app.post("/api/locate", async (req, res) => {
   if (!fileName) return res.status(400).json({ error: "No file name" });
   try {
     const filePath = await findFileOnDisk(fileName, fileSize);
+    if (!isPathAllowed(filePath)) {
+      return res.status(403).json({ error: "Found file is outside allowed directories" });
+    }
     res.json({ path: filePath });
   } catch (err) {
     res.status(404).json({ error: err.message });
