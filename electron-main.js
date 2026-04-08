@@ -51,12 +51,15 @@ function getDisplayVersion() {
 function setupAutoUpdater() {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
+  // Skip code signing verification (app is ad-hoc signed, not Apple Developer ID)
+  autoUpdater.forceDevUpdateConfig = true;
 
   autoUpdater.on("update-available", (info) => {
+    const ver = info.version || "unknown";
     dialog.showMessageBox(mainWindow, {
       type: "info",
       title: "Update Available",
-      message: `Filey v${info.version} is available (you have v${getDisplayVersion()}).`,
+      message: `Filey v${ver} is available (you have v${getDisplayVersion()}).`,
       buttons: ["Download & Install", "Later"],
       defaultId: 0,
     }).then((result) => {
@@ -75,13 +78,26 @@ function setupAutoUpdater() {
       defaultId: 0,
     }).then((result) => {
       if (result.response === 0) {
-        autoUpdater.quitAndInstall();
+        setImmediate(() => autoUpdater.quitAndInstall(false, true));
       }
     });
   });
 
+  autoUpdater.on("download-progress", (progress) => {
+    if (mainWindow) {
+      mainWindow.setProgressBar(progress.percent / 100);
+    }
+  });
+
   autoUpdater.on("error", (err) => {
     console.log("Auto-update error:", err.message);
+    if (mainWindow) {
+      dialog.showMessageBox(mainWindow, {
+        type: "error",
+        title: "Update Error",
+        message: `Update failed: ${err.message}`,
+      });
+    }
   });
 }
 
