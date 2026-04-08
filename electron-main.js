@@ -32,7 +32,7 @@ function createWindow() {
   mainWindow.loadURL(`http://localhost:${PORT}`);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (url.startsWith("https://")) shell.openExternal(url);
     return { action: "deny" };
   });
 

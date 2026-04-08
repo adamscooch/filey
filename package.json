@@ -1,6 +1,6 @@
 {
   "name": "filey",
-  "version": "26.402.8",
+  "version": "26.408.1",
   "description": "Simple file compression, conversion, and manipulation tool",
   "main": "electron-main.js",
   "scripts": {
@@ -49,7 +49,7 @@
         }
       ],
       "icon": "build/icon.icns",
-      "hardenedRuntime": false
+      "hardenedRuntime": true
     },
     "files": [
       "electron-main.js",

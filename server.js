@@ -145,6 +145,37 @@ async function findFileOnDisk(fileName, fileSize) {
   throw new Error(`Could not find "${fileName}" on disk.`);
 }
 
+// --- Path validation ---
+
+const ALLOWED_PREFIXES = (() => {
+  const homedir = os.homedir();
+  return [
+    path.join(homedir, "Desktop"),
+    path.join(homedir, "Downloads"),
+    path.join(homedir, "Documents"),
+    path.join(homedir, "Pictures"),
+    path.join(homedir, "Movies"),
+    os.tmpdir(),
+  ];
+})();
+
+function isPathAllowed(filePath) {
+  try {
+    const resolved = fs.realpathSync(filePath);
+    return ALLOWED_PREFIXES.some((prefix) =>
+      resolved === prefix || resolved.startsWith(prefix + path.sep)
+    );
+  } catch (_) {
+    return false;
+  }
+}
+
+const crypto = require("crypto");
+function uniqueTmp(prefix, ext) {
+  const id = `${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+  return path.join(os.tmpdir(), `${prefix}_${id}${ext || ""}`);
+}
+
 // --- FFmpeg helpers ---
 
 function getVideoInfo(filePath) {
@@ -208,8 +239,7 @@ function runOptimTool(bin, args, timeout = 60000) {
 async function optimizeJpeg(filePath, quality, isLossy) {
   const results = [];
   const origSize = fs.statSync(filePath).size;
-  const ts = Date.now();
-  const tmpBase = path.join(os.tmpdir(), `filey_jpg_${ts}`);
+  const tmpBase = uniqueTmp("filey_jpg");
 
   // Lossy pass: jpegoptim with quality cap (only if quality < 100)
   if (isLossy && OPTIM_TOOLS["jpegoptim"]) {
@@ -258,8 +288,7 @@ async function optimizeJpeg(filePath, quality, isLossy) {
 async function optimizePng(filePath, quality, isLossy) {
   const origSize = fs.statSync(filePath).size;
   const results = [];
-  const ts = Date.now();
-  const tmpBase = path.join(os.tmpdir(), `filey_png_${ts}`);
+  const tmpBase = uniqueTmp("filey_png");
 
   // Lossy pass first: pngquant (like ImageOptim Phase 1)
   let pngquantOutput = filePath;
@@ -355,7 +384,7 @@ async function processImage(inputPath, options = {}) {
   // HEIC/HEIF pre-conversion: sharp may lack libheif, so use macOS sips as fallback
   let effectiveInput = inputPath;
   if ([".heic", ".heif"].includes(ext)) {
-    const tmpJpg = path.join(os.tmpdir(), `filey_heic_${Date.now()}.jpg`);
+    const tmpJpg = uniqueTmp("filey_heic", ".jpg");
     try {
       await new Promise((resolve, reject) => {
         execFile("sips", ["-s", "format", "jpeg", inputPath, "--out", tmpJpg], (err) => {
@@ -447,12 +476,12 @@ async function processImage(inputPath, options = {}) {
   }
 
   // SHARP PATH: format conversion, resize, target size, or quality adjustment
-  const result = await processImageWithSharp(effectiveInput, outputPath, metadata, outFmt, quality, stripMeta, resize, targetBytes, originalSize, inputPath, optimize);
-
-  // Clean up HEIC temp file if used
-  if (effectiveInput !== inputPath) try { fs.unlinkSync(effectiveInput); } catch (_) {}
-
-  return result;
+  try {
+    const result = await processImageWithSharp(effectiveInput, outputPath, metadata, outFmt, quality, stripMeta, resize, targetBytes, originalSize, inputPath, optimize);
+    return result;
+  } finally {
+    if (effectiveInput !== inputPath) try { fs.unlinkSync(effectiveInput); } catch (_) {}
+  }
 }
 
 async function processImageWithSharp(inputPath, outputPath, metadata, outFmt, quality, stripMeta, resize, targetBytes, originalSize, originalInputPath, optimize) {
@@ -828,7 +857,7 @@ async function compressVideo(inputPath, format, scalePercent, targetBytes, resWi
 
   if (targetSizeKB > 0 && !isHW && !isAV1) {
     // 2-pass encoding for software H.264/H.265 with target size
-    const passLogFile = path.join(os.tmpdir(), `filey_pass_${Date.now()}`);
+    const passLogFile = uniqueTmp("filey_pass");
     const bitrateIdx = args.indexOf("-b:v");
     const videoBitrateVal = args[bitrateIdx + 1];
 
@@ -852,16 +881,18 @@ async function compressVideo(inputPath, format, scalePercent, targetBytes, resWi
     }
     pass2Args.push(outputPath);
 
-    await runFFmpeg(pass1Args);
-    await runFFmpeg(pass2Args);
-
     try {
-      for (const f of fs.readdirSync(os.tmpdir())) {
-        if (f.startsWith(path.basename(passLogFile))) {
-          fs.unlinkSync(path.join(os.tmpdir(), f));
+      await runFFmpeg(pass1Args);
+      await runFFmpeg(pass2Args);
+    } finally {
+      try {
+        for (const f of fs.readdirSync(os.tmpdir())) {
+          if (f.startsWith(path.basename(passLogFile))) {
+            fs.unlinkSync(path.join(os.tmpdir(), f));
+          }
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
   } else {
     // Single-pass: HW encoders, AV1, or quality-based (no target size)
     await runFFmpeg(args);
@@ -898,7 +929,7 @@ async function videoToGif(inputPath, fps = 10, width = 480, targetBytes = 0, suf
   const baseName = path.basename(inputPath, ext);
   const dir = path.dirname(inputPath);
   const outputPath = path.join(dir, `${baseName}${suffix}.gif`);
-  const palettePath = path.join(os.tmpdir(), `filey_palette_${Date.now()}.png`);
+  const palettePath = uniqueTmp("filey_palette", ".png");
   const originalSize = fs.statSync(inputPath).size;
 
   const info = await getVideoInfo(inputPath);
@@ -934,68 +965,75 @@ async function videoToGif(inputPath, fps = 10, width = 480, targetBytes = 0, suf
     // If trimming, extract trimmed clip to temp file first (gifski has no trim support)
     let gifskiInput = inputPath;
     let tempTrimmed = null;
-    if (isTrimming) {
-      tempTrimmed = path.join(os.tmpdir(), `filey_trim_${Date.now()}.mp4`);
-      await runFFmpeg([
-        "-y", ...preInputArgs, "-i", inputPath, ...postInputArgs,
-        "-c:v", "copy", "-an", tempTrimmed,
-      ]);
-      gifskiInput = tempTrimmed;
-    }
-
-    // Map quality slider: maxColors 8-256 → gifski quality 30-100
-    const gifskiQuality = Math.max(30, Math.min(100, Math.round((maxColors / 256) * 70 + 30)));
-
-    const gifskiArgs = [
-      "--fps", String(fps),
-      "--quality", String(gifskiQuality),
-      "--output", outputPath,
-      "--quiet",
-    ];
-    if (width > 0) gifskiArgs.push("--width", String(width));
-    if (bounce) gifskiArgs.push("--bounce");
-    gifskiArgs.push(gifskiInput);
-
-    await new Promise((resolve, reject) => {
-      execFile(OPTIM_TOOLS["gifski"], gifskiArgs, { timeout: 300000 }, (err) => {
-        if (err) reject(new Error(`gifski failed: ${err.message}`));
-        else resolve();
-      });
-    });
-
-    // Clean up temp trimmed file
-    if (tempTrimmed) try { fs.unlinkSync(tempTrimmed); } catch (_) {}
-
-    // If target size set and gifski output is too large, retry with lower quality
-    if (targetBytes > 0 && fs.statSync(outputPath).size > targetBytes) {
-      const qualitySteps = [60, 40, 30].filter(q => q < gifskiQuality);
-      for (const q of qualitySteps) {
-        if (fs.statSync(outputPath).size <= targetBytes) break;
-        const retryArgs = [
-          "--fps", String(fps),
-          "--quality", String(q),
-          "--output", outputPath,
-          "--quiet",
-        ];
-        if (width > 0) retryArgs.push("--width", String(width));
-        if (bounce) retryArgs.push("--bounce");
-        retryArgs.push(gifskiInput === inputPath ? inputPath : gifskiInput);
-
-        // For retries with trim, we need to re-extract since temp was deleted
-        let retryInput = inputPath;
-        let retryTemp = null;
-        if (isTrimming) {
-          retryTemp = path.join(os.tmpdir(), `filey_trim_${Date.now()}.mp4`);
-          await runFFmpeg(["-y", ...preInputArgs, "-i", inputPath, ...postInputArgs, "-c:v", "copy", "-an", retryTemp]);
-          retryInput = retryTemp;
-          retryArgs[retryArgs.length - 1] = retryInput;
-        }
-
-        await new Promise((resolve) => {
-          execFile(OPTIM_TOOLS["gifski"], retryArgs, { timeout: 300000 }, () => resolve());
-        });
-        if (retryTemp) try { fs.unlinkSync(retryTemp); } catch (_) {}
+    try {
+      if (isTrimming) {
+        tempTrimmed = uniqueTmp("filey_trim", ".mp4");
+        await runFFmpeg([
+          "-y", ...preInputArgs, "-i", inputPath, ...postInputArgs,
+          "-c:v", "copy", "-an", tempTrimmed,
+        ]);
+        gifskiInput = tempTrimmed;
       }
+
+      // Map quality slider: maxColors 8-256 → gifski quality 30-100
+      const gifskiQuality = Math.max(30, Math.min(100, Math.round((maxColors / 256) * 70 + 30)));
+
+      const gifskiArgs = [
+        "--fps", String(fps),
+        "--quality", String(gifskiQuality),
+        "--output", outputPath,
+        "--quiet",
+      ];
+      if (width > 0) gifskiArgs.push("--width", String(width));
+      if (bounce) gifskiArgs.push("--bounce");
+      gifskiArgs.push(gifskiInput);
+
+      await new Promise((resolve, reject) => {
+        execFile(OPTIM_TOOLS["gifski"], gifskiArgs, { timeout: 300000 }, (err) => {
+          if (err) reject(new Error(`gifski failed: ${err.message}`));
+          else resolve();
+        });
+      });
+
+      // Clean up temp trimmed file
+      if (tempTrimmed) { try { fs.unlinkSync(tempTrimmed); } catch (_) {} tempTrimmed = null; }
+
+      // If target size set and gifski output is too large, retry with lower quality
+      if (targetBytes > 0 && fs.statSync(outputPath).size > targetBytes) {
+        const qualitySteps = [60, 40, 30].filter(q => q < gifskiQuality);
+        for (const q of qualitySteps) {
+          if (fs.statSync(outputPath).size <= targetBytes) break;
+          const retryArgs = [
+            "--fps", String(fps),
+            "--quality", String(q),
+            "--output", outputPath,
+            "--quiet",
+          ];
+          if (width > 0) retryArgs.push("--width", String(width));
+          if (bounce) retryArgs.push("--bounce");
+          retryArgs.push(gifskiInput === inputPath ? inputPath : gifskiInput);
+
+          // For retries with trim, we need to re-extract since temp was deleted
+          let retryInput = inputPath;
+          let retryTemp = null;
+          if (isTrimming) {
+            retryTemp = uniqueTmp("filey_trim", ".mp4");
+            await runFFmpeg(["-y", ...preInputArgs, "-i", inputPath, ...postInputArgs, "-c:v", "copy", "-an", retryTemp]);
+            retryInput = retryTemp;
+            retryArgs[retryArgs.length - 1] = retryInput;
+          }
+
+          try {
+            await new Promise((resolve) => {
+              execFile(OPTIM_TOOLS["gifski"], retryArgs, { timeout: 300000 }, () => resolve());
+            });
+          } finally {
+            if (retryTemp) try { fs.unlinkSync(retryTemp); } catch (_) {}
+          }
+        }
+      }
+    } finally {
+      if (tempTrimmed) try { fs.unlinkSync(tempTrimmed); } catch (_) {}
     }
   } else {
     // FFMPEG FALLBACK: standard palettegen/paletteuse pipeline
@@ -1228,7 +1266,7 @@ async function transcribeVideo(inputPath, model = "base", language = "auto", out
 
   // Whisper outputs to a directory with the base name of the input file
   // We'll use a temp dir for output, then rename
-  const tmpDir = path.join(os.tmpdir(), `filey_whisper_${Date.now()}`);
+  const tmpDir = uniqueTmp("filey_whisper");
   fs.mkdirSync(tmpDir, { recursive: true });
 
   const args = [inputPath, "--model", model, "--output_format", outputFormat, "--output_dir", tmpDir];
@@ -1255,15 +1293,15 @@ async function transcribeVideo(inputPath, model = "base", language = "auto", out
     throw new Error(`Transcription failed. No output file found. Files in tmp: ${files.join(", ")}`);
   }
 
-  const transcript = fs.readFileSync(whisperOutputPath, "utf-8");
-
-  // Copy to final destination
   const finalName = `${baseName}${suffix}.${outputFormat}`;
   const finalPath = path.join(dir, finalName);
-  fs.copyFileSync(whisperOutputPath, finalPath);
-
-  // Clean up temp dir
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  let transcript;
+  try {
+    transcript = fs.readFileSync(whisperOutputPath, "utf-8");
+    fs.copyFileSync(whisperOutputPath, finalPath);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 
   const outputSize = fs.statSync(finalPath).size;
 
@@ -1288,6 +1326,7 @@ app.post("/api/verify-path", (req, res) => {
   if (!filePath) return res.json({ valid: false });
   try {
     fs.statSync(filePath);
+    if (!isPathAllowed(filePath)) return res.json({ valid: false });
     res.json({ valid: true });
   } catch (_) {
     res.json({ valid: false });
@@ -1310,6 +1349,7 @@ app.post("/api/locate", async (req, res) => {
 app.post("/api/file-info", async (req, res) => {
   const { path: filePath, type } = req.body;
   if (!filePath) return res.status(400).json({ error: "No path" });
+  if (!isPathAllowed(filePath)) return res.status(403).json({ error: "Access denied" });
 
   try {
     const stat = fs.statSync(filePath);
@@ -1344,6 +1384,7 @@ app.post("/api/file-info", async (req, res) => {
 app.post("/api/process-image", async (req, res) => {
   const { filePath, outputFormat, quality, stripMeta, resize, targetBytes, suffix, optimize } = req.body;
   if (!filePath) return res.status(400).json({ error: "No file" });
+  if (!isPathAllowed(filePath)) return res.status(403).json({ error: "Access denied" });
 
   try {
     const clampedQuality = Math.max(1, Math.min(100, parseInt(quality) || 85));
@@ -1369,6 +1410,7 @@ app.post("/api/process-image", async (req, res) => {
 app.post("/api/process-video", async (req, res) => {
   const { filePath, format, scale, targetBytes, resWidth, resHeight, suffix, quality, trimStart, trimEnd, codec, audio, denoise } = req.body;
   if (!filePath) return res.status(400).json({ error: "No file" });
+  if (!isPathAllowed(filePath)) return res.status(403).json({ error: "Access denied" });
 
   try {
     const clampedTarget = Math.max(0, Math.min(parseInt(targetBytes) || 0, 500 * 1024 * 1024));
@@ -1410,6 +1452,7 @@ app.post("/api/process-video", async (req, res) => {
 app.post("/api/process-gif", async (req, res) => {
   const { filePath, fps, width, targetBytes, suffix, quality, trimStart, trimEnd, bounce } = req.body;
   if (!filePath) return res.status(400).json({ error: "No file" });
+  if (!isPathAllowed(filePath)) return res.status(403).json({ error: "Access denied" });
 
   try {
     const clampedTarget = Math.max(0, Math.min(parseInt(targetBytes) || 0, 100 * 1024 * 1024));
@@ -1443,6 +1486,7 @@ app.post("/api/process-gif", async (req, res) => {
 app.post("/api/process-svg", async (req, res) => {
   const { filePath, suffix } = req.body;
   if (!filePath) return res.status(400).json({ error: "No file" });
+  if (!isPathAllowed(filePath)) return res.status(403).json({ error: "Access denied" });
 
   try {
     const safeSuffix = (suffix || "-filey").replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 50) || "-filey";
@@ -1457,6 +1501,7 @@ app.post("/api/process-svg", async (req, res) => {
 app.post("/api/process-pdf", async (req, res) => {
   const { filePath, quality, suffix } = req.body;
   if (!filePath) return res.status(400).json({ error: "No file" });
+  if (!isPathAllowed(filePath)) return res.status(403).json({ error: "Access denied" });
 
   try {
     const safeSuffix = (suffix || "-filey").replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 50) || "-filey";
@@ -1472,6 +1517,7 @@ app.post("/api/process-pdf", async (req, res) => {
 app.post("/api/reveal", (req, res) => {
   const filePath = req.body.path;
   if (!filePath) return res.status(400).json({ error: "No path" });
+  if (!isPathAllowed(filePath)) return res.status(403).json({ error: "Access denied" });
   execFile("open", ["-R", filePath], (err) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ success: true });
@@ -1482,6 +1528,7 @@ app.post("/api/reveal", (req, res) => {
 app.post("/api/estimate-image", async (req, res) => {
   const { filePath, outputFormat, quality, resize } = req.body;
   if (!filePath) return res.status(400).json({ error: "No file" });
+  if (!isPathAllowed(filePath)) return res.status(403).json({ error: "Access denied" });
 
   try {
     const metadata = await sharp(filePath).metadata();
@@ -1596,6 +1643,7 @@ app.post("/api/estimate-image", async (req, res) => {
 app.post("/api/estimate-video", async (req, res) => {
   const { filePath, quality, resWidth, codec } = req.body;
   if (!filePath) return res.status(400).json({ error: "No file" });
+  if (!isPathAllowed(filePath)) return res.status(403).json({ error: "Access denied" });
 
   try {
     const info = await getVideoInfo(filePath);
@@ -1654,6 +1702,7 @@ app.post("/api/estimate-video", async (req, res) => {
 app.post("/api/estimate-pdf", async (req, res) => {
   const { filePath, quality } = req.body;
   if (!filePath) return res.status(400).json({ error: "No file" });
+  if (!isPathAllowed(filePath)) return res.status(403).json({ error: "Access denied" });
 
   try {
     const originalSize = fs.statSync(filePath).size;
@@ -1672,23 +1721,9 @@ app.get("/api/serve-file", (req, res) => {
   const filePath = req.query.path;
   if (!filePath) return res.status(400).json({ error: "No path" });
 
-  // Security: only allow files within common user directories
-  const homedir = os.homedir();
-  const allowedPrefixes = [
-    path.join(homedir, "Desktop"),
-    path.join(homedir, "Downloads"),
-    path.join(homedir, "Documents"),
-    path.join(homedir, "Pictures"),
-    path.join(homedir, "Movies"),
-    os.tmpdir(),
-  ];
+  if (!isPathAllowed(filePath)) return res.status(403).json({ error: "Access denied" });
 
-  const resolvedPath = path.resolve(filePath);
-  const isAllowed = allowedPrefixes.some((prefix) => resolvedPath.startsWith(prefix));
-  if (!isAllowed) return res.status(403).json({ error: "Access denied" });
-
-  if (!fs.existsSync(resolvedPath)) return res.status(404).json({ error: "File not found" });
-
+  const resolvedPath = fs.realpathSync(filePath);
   const ext = path.extname(resolvedPath).toLowerCase();
   const mimeMap = {
     ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
@@ -1699,13 +1734,19 @@ app.get("/api/serve-file", (req, res) => {
 
   res.setHeader("Content-Type", mimeMap[ext] || "application/octet-stream");
   res.setHeader("Cache-Control", "no-cache");
-  fs.createReadStream(resolvedPath).pipe(res);
+  const stream = fs.createReadStream(resolvedPath);
+  stream.on("error", (err) => {
+    if (!res.headersSent) res.status(404).json({ error: "File not found" });
+    else res.destroy();
+  });
+  stream.pipe(res);
 });
 
 // Transcribe video/audio
 app.post("/api/transcribe", async (req, res) => {
   const { filePath, model, language, outputFormat, suffix } = req.body;
   if (!filePath) return res.status(400).json({ error: "No file" });
+  if (!isPathAllowed(filePath)) return res.status(403).json({ error: "Access denied" });
 
   try {
     const safeModel = ["tiny", "base", "small", "medium"].includes(model) ? model : "base";
@@ -1784,7 +1825,7 @@ app.get("/api/status", (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Filey is running at http://localhost:${PORT}`);
+app.listen(PORT, "127.0.0.1", () => {
+  console.log(`Filey is running at http://127.0.0.1:${PORT}`);
   if (!HAS_FFMPEG) console.warn("⚠ FFmpeg not found — video/GIF tools will not work. Install with: brew install ffmpeg");
 });

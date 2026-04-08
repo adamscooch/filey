@@ -19,6 +19,16 @@ function extractDropPaths(dataTransfer) {
 
 // --- Shared utilities ---
 
+function escapeHtml(str) {
+  if (typeof str !== "string") return "";
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function escapeAttr(str) {
+  if (typeof str !== "string") return "";
+  return str.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 function formatSize(bytes) {
   if (bytes < 1000) return bytes + " B";
   if (bytes < 1000 * 1000) return (bytes / 1000).toFixed(1) + " KB";
@@ -245,14 +255,14 @@ class ToolCard {
       .map((f, i) => {
         if (f.error) {
           return `<div class="file-item file-error">
-            <div class="file-name">${f.name}</div>
-            <div class="file-meta">${f.error}</div>
+            <div class="file-name">${escapeHtml(f.name)}</div>
+            <div class="file-meta">${escapeHtml(f.error)}</div>
           </div>`;
         }
         return `<div class="file-item">
           <button class="file-remove-btn" data-index="${i}">&times;</button>
-          <div class="file-name">${f.name}</div>
-          <div class="file-meta">${formatSize(f.size)} &middot; ${shortenPath(f.path)}</div>
+          <div class="file-name">${escapeHtml(f.name)}</div>
+          <div class="file-meta">${formatSize(f.size)} &middot; ${escapeHtml(shortenPath(f.path))}</div>
         </div>`;
       })
       .join("");
@@ -373,8 +383,8 @@ class ToolCard {
 
       for (const e of allErrors) {
         html += `<div class="result-card result-error">
-          <div class="result-header">${e.file}</div>
-          <div class="result-meta">Error: ${e.error}</div>
+          <div class="result-header">${escapeHtml(e.file)}</div>
+          <div class="result-meta">Error: ${escapeHtml(e.error)}</div>
         </div>`;
       }
 
@@ -402,12 +412,13 @@ class ToolCard {
       this.batchCounter.classList.add("hidden");
       this.controls.classList.remove("hidden");
       this.fileList.classList.remove("hidden");
-      alert("Error: " + err.message);
-    } finally {
       this.goBtn.disabled = false;
-      this.pendingFiles = [];
-      this.fileInput.value = "";
+      alert("Error: " + err.message);
+      return;
     }
+    this.goBtn.disabled = false;
+    this.pendingFiles = [];
+    this.fileInput.value = "";
   }
 
   reset() {
@@ -442,15 +453,15 @@ function renderResult(r, isSingleFile) {
       : `+${Math.abs(savedPercent)}% larger`;
 
   const warningHtml = r.warning
-    ? `<div class="result-warning-text">${r.warning}</div>`
+    ? `<div class="result-warning-text">${escapeHtml(r.warning)}</div>`
     : "";
 
   const methodHtml = r.method
-    ? `<div class="result-meta">Method: ${r.method}</div>`
+    ? `<div class="result-meta">Method: ${escapeHtml(r.method)}</div>`
     : "";
 
   const dimsHtml = r.dimensions
-    ? `<div class="result-meta">${r.dimensions}</div>`
+    ? `<div class="result-meta">${escapeHtml(r.dimensions)}</div>`
     : "";
 
   // Before/after comparison slider (single images only)
@@ -477,7 +488,7 @@ function renderResult(r, isSingleFile) {
 
   return `<div class="result-card${r.warning ? ' result-warning' : ''}">
     <button class="results-close-btn" title="Close">&times;</button>
-    <div class="result-header">${r.outputName}</div>
+    <div class="result-header">${escapeHtml(r.outputName)}</div>
     <div class="result-savings ${savingsClass}">${savingsText}</div>
     <div class="result-details">
       <span>${origDisplay}</span>
@@ -487,8 +498,8 @@ function renderResult(r, isSingleFile) {
     ${dimsHtml}
     ${warningHtml}
     ${comparisonHtml}
-    <div class="saved-path">Saved to ${shortenPath(r.savedTo)}</div>
-    <button class="reveal-btn" data-path="${r.savedTo}">Show in Finder</button>
+    <div class="saved-path">Saved to ${escapeHtml(shortenPath(r.savedTo))}</div>
+    <button class="reveal-btn" data-path="${escapeAttr(r.savedTo)}">Show in Finder</button>
   </div>`;
 }
 
@@ -508,7 +519,7 @@ function renderVideoResult(r) {
       : `+${Math.abs(savedPercent)}% larger`;
 
   const warningHtml = r.warning
-    ? `<div class="result-warning-text">${r.warning}</div>`
+    ? `<div class="result-warning-text">${escapeHtml(r.warning)}</div>`
     : "";
 
   const qualityMeta = r.qualityUsed
@@ -517,17 +528,17 @@ function renderVideoResult(r) {
 
   return `<div class="result-card${r.warning ? ' result-warning' : ''}">
     <button class="results-close-btn" title="Close">&times;</button>
-    <div class="result-header">${r.outputName}</div>
+    <div class="result-header">${escapeHtml(r.outputName)}</div>
     <div class="result-savings ${savingsClass}">${savingsText}</div>
     <div class="result-details">
       <span>${origDisplay}</span>
       <span class="arrow">&rarr;</span>
       <span>${outDisplay}</span>
     </div>
-    <div class="result-meta">${r.dimensions} &middot; ${r.codec}${qualityMeta}</div>
+    <div class="result-meta">${escapeHtml(r.dimensions)} &middot; ${escapeHtml(r.codec)}${qualityMeta}</div>
     ${warningHtml}
-    <div class="saved-path">Saved to ${shortenPath(r.savedTo)}</div>
-    <button class="reveal-btn" data-path="${r.savedTo}">Show in Finder</button>
+    <div class="saved-path">Saved to ${escapeHtml(shortenPath(r.savedTo))}</div>
+    <button class="reveal-btn" data-path="${escapeAttr(r.savedTo)}">Show in Finder</button>
   </div>`;
 }
 
@@ -547,7 +558,7 @@ function renderGifResult(r) {
       : `+${Math.abs(savedPercent)}% larger`;
 
   const warningHtml = r.warning
-    ? `<div class="result-warning-text">${r.warning}</div>`
+    ? `<div class="result-warning-text">${escapeHtml(r.warning)}</div>`
     : "";
 
   const colorsInfo = r.colorsUsed ? `${r.colorsUsed} colors` : "";
@@ -557,17 +568,17 @@ function renderGifResult(r) {
 
   return `<div class="result-card${r.warning ? ' result-warning' : ''}">
     <button class="results-close-btn" title="Close">&times;</button>
-    <div class="result-header">${r.outputName}</div>
+    <div class="result-header">${escapeHtml(r.outputName)}</div>
     <div class="result-savings ${savingsClass}">${savingsText}</div>
     <div class="result-details">
       <span>${origDisplay}</span>
       <span class="arrow">&rarr;</span>
       <span>${outDisplay}</span>
     </div>
-    ${metaParts.length ? `<div class="result-meta">${metaParts.join(" &middot; ")}</div>` : ""}
+    ${metaParts.length ? `<div class="result-meta">${escapeHtml(metaParts.join(" \u00b7 "))}</div>` : ""}
     ${warningHtml}
-    <div class="saved-path">Saved to ${shortenPath(r.savedTo)}</div>
-    <button class="reveal-btn" data-path="${r.savedTo}">Show in Finder</button>
+    <div class="saved-path">Saved to ${escapeHtml(shortenPath(r.savedTo))}</div>
+    <button class="reveal-btn" data-path="${escapeAttr(r.savedTo)}">Show in Finder</button>
   </div>`;
 }
 
@@ -591,12 +602,12 @@ function renderTranscriptResult(r) {
 
   return `<div class="result-card transcript-result">
     <button class="results-close-btn" title="Close">&times;</button>
-    <div class="result-header">${r.outputName}</div>
-    <div class="result-meta">${r.model} model &middot; ${r.language} &middot; ${r.outputFormat.toUpperCase()}</div>
+    <div class="result-header">${escapeHtml(r.outputName)}</div>
+    <div class="result-meta">${escapeHtml(r.model)} model &middot; ${escapeHtml(r.language)} &middot; ${escapeHtml(r.outputFormat.toUpperCase())}</div>
     <div class="transcript-box"><pre class="transcript-text">${escaped}</pre></div>
-    <button class="copy-transcript-btn" data-key="${r.savedTo}">Copy to Clipboard</button>
-    <div class="saved-path">Saved to ${shortenPath(r.savedTo)}</div>
-    <button class="reveal-btn" data-path="${r.savedTo}">Show in Finder</button>
+    <button class="copy-transcript-btn" data-key="${escapeAttr(r.savedTo)}">Copy to Clipboard</button>
+    <div class="saved-path">Saved to ${escapeHtml(shortenPath(r.savedTo))}</div>
+    <button class="reveal-btn" data-path="${escapeAttr(r.savedTo)}">Show in Finder</button>
   </div>`;
 }
 
@@ -1302,11 +1313,17 @@ const videoCard = new ToolCard({
     detectVideoResolution(card);
     scheduleVideoEstimate();
   },
-  checkWarnings: (card) => {
-    const targetEl = document.getElementById("vc-target");
-    if (targetEl) targetEl.addEventListener("input", () => checkVideoWarnings(card));
-    checkVideoWarnings(card);
-  },
+  checkWarnings: (() => {
+    let bound = false;
+    return (card) => {
+      if (!bound) {
+        const targetEl = document.getElementById("vc-target");
+        if (targetEl) targetEl.addEventListener("input", () => checkVideoWarnings(card));
+        bound = true;
+      }
+      checkVideoWarnings(card);
+    };
+  })(),
   getPayload: (card, file) => {
     const mode = card.getCompressionMode();
     const { resWidth, resHeight, scale } = getVideoResolution();
