@@ -140,13 +140,16 @@ h1 {
 }
 
 .version {
-  display: block;
-  font-size: 0.62rem;
-  color: var(--text-muted);
-  letter-spacing: 1px;
-  margin-top: 6px;
+  font-size: 0.6rem;
+  color: var(--text-faint);
+  letter-spacing: 0.5px;
   font-weight: 500;
-  opacity: 1;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 8px;
+  margin-left: 2px;
+  align-self: center;
 }
 
 .subtitle::before {
