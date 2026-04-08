@@ -1724,3 +1724,8 @@ imageCard.config.onFilesReady = (card) => {
     document.querySelector(".container").prepend(banner);
   } catch (_) {}
 })();
+
+// --- Version display ---
+fetch("/api/version").then(r => r.json()).then(d => {
+  document.getElementById("app-version").textContent = "v" + d.version;
+}).catch(() => {});

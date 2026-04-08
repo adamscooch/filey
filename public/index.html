@@ -525,10 +525,5 @@
   </div>
 
   <script src="app.js"></script>
-  <script>
-    fetch("/api/version").then(r => r.json()).then(d => {
-      document.getElementById("app-version").textContent = "v" + d.version;
-    }).catch(() => {});
-  </script>
 </body>
 </html>
