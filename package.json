@@ -1,6 +1,6 @@
 {
   "name": "filey",
-  "version": "26.408.9",
+  "version": "26.408.10",
   "description": "Simple file compression, conversion, and manipulation tool",
   "main": "electron-main.js",
   "scripts": {
@@ -14,7 +14,6 @@
     "deploy:macbook": "bash deploy-macbook.sh"
   },
   "dependencies": {
-    "electron-updater": "^6.8.3",
     "exiftool-vendored": "^35.13.1",
     "express": "^4.21.0",
     "sharp": "^0.34.5",
@@ -54,6 +53,7 @@
     },
     "files": [
       "electron-main.js",
+      "preload.js",
       "server.js",
       "package.json",
       "public/**/*",

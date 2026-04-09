@@ -1,6 +1,7 @@
-const { app, BrowserWindow, shell, dialog, Menu } = require("electron");
-const { autoUpdater } = require("electron-updater");
+const { app, BrowserWindow, shell, dialog, Menu, net } = require("electron");
 const path = require("path");
+const fs = require("fs");
+const { execFile } = require("child_process");
 
 // Determine if running from packaged app or dev
 const isPackaged = app.isPackaged;
@@ -14,6 +15,9 @@ process.env.FILEY_BIN_DIR = bundledBinDir;
 const PORT = 3456;
 let mainWindow;
 
+const GITHUB_OWNER = "adamscooch";
+const GITHUB_REPO = "filey";
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 840,
@@ -24,6 +28,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, "preload.js"),
     },
   });
 
@@ -47,76 +52,229 @@ function getDisplayVersion() {
   );
 }
 
-// --- Auto-updater (electron-updater via GitHub Releases) ---
-function setupAutoUpdater() {
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = true;
+function semverToComparable(semver) {
+  const parts = semver.split(".").map(Number);
+  return parts[0] * 1000000 + parts[1] * 1000 + parts[2];
+}
 
-  autoUpdater.on("update-available", (info) => {
-    const ver = info.version || "unknown";
-    dialog.showMessageBox(mainWindow, {
-      type: "info",
-      title: "Update Available",
-      message: `Filey v${ver} is available (you have v${getDisplayVersion()}).`,
-      buttons: ["Download & Install", "Later"],
-      defaultId: 0,
-    }).then((result) => {
-      if (result.response === 0) {
-        autoUpdater.downloadUpdate();
+// --- Send update status to renderer ---
+function sendUpdateStatus(status, data = {}) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("update-status", { status, ...data });
+  }
+}
+
+// --- Manual updater (bypasses Squirrel code signing) ---
+function checkForUpdates(manual) {
+  const currentSemver = require("./package.json").version;
+  const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
+
+  const request = net.request(url);
+  request.setHeader("User-Agent", "Filey-Updater");
+
+  let body = "";
+  request.on("response", (response) => {
+    response.on("data", (chunk) => { body += chunk.toString(); });
+    response.on("end", () => {
+      try {
+        const release = JSON.parse(body);
+        const tagName = release.tag_name || "";
+        const latestDisplay = tagName.replace(/^v/, "");
+
+        // Find the ZIP asset (electron-updater uses ZIP for macOS)
+        const zipAsset = (release.assets || []).find(a => a.name.endsWith("-mac.zip") || a.name.endsWith("-arm64-mac.zip"));
+
+        const latestParts = latestDisplay.match(/^(\d{2})(\d{4})\.(\d+)$/);
+        if (!latestParts) {
+          if (manual) showUpToDate();
+          return;
+        }
+        const latestSemver = `${latestParts[1]}.${parseInt(latestParts[2])}.${latestParts[3]}`;
+        const current = semverToComparable(currentSemver);
+        const latest = semverToComparable(latestSemver);
+
+        if (latest > current && zipAsset) {
+          sendUpdateStatus("available", { version: latestDisplay });
+          dialog.showMessageBox(mainWindow, {
+            type: "info",
+            title: "Update Available",
+            message: `Filey v${latestDisplay} is available (you have v${getDisplayVersion()}).`,
+            buttons: ["Download & Install", "Later"],
+            defaultId: 0,
+          }).then((result) => {
+            if (result.response === 0) {
+              downloadAndInstall(zipAsset.browser_download_url, latestDisplay);
+            } else {
+              sendUpdateStatus("idle");
+            }
+          });
+        } else if (manual) {
+          showUpToDate();
+        }
+      } catch (err) {
+        console.log("Update check failed:", err.message);
+        if (manual) showUpdateError(err.message);
       }
     });
   });
 
-  autoUpdater.on("update-downloaded", () => {
-    dialog.showMessageBox(mainWindow, {
-      type: "info",
-      title: "Update Ready",
-      message: "Update downloaded. Filey will restart to install it.",
-      buttons: ["Restart Now", "Later"],
-      defaultId: 0,
-    }).then((result) => {
-      if (result.response === 0) {
-        setImmediate(() => autoUpdater.quitAndInstall(false, true));
+  request.on("error", (err) => {
+    console.log("Update check error:", err.message);
+    if (manual) showUpdateError(err.message);
+  });
+
+  request.end();
+}
+
+function downloadAndInstall(zipUrl, version) {
+  const tmpDir = path.join(app.getPath("temp"), "filey-update");
+  const zipPath = path.join(tmpDir, "update.zip");
+
+  // Clean up any previous update attempt
+  try { fs.rmSync(tmpDir, { recursive: true }); } catch (_) {}
+  fs.mkdirSync(tmpDir, { recursive: true });
+
+  sendUpdateStatus("downloading", { percent: 0 });
+
+  // Download the ZIP using net module (follows redirects)
+  const downloadFile = (url) => {
+    const request = net.request(url);
+    request.setHeader("User-Agent", "Filey-Updater");
+
+    request.on("response", (response) => {
+      // Handle redirects (GitHub serves assets via S3 redirect)
+      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        downloadFile(response.headers.location);
+        return;
       }
-    });
-  });
 
-  autoUpdater.on("download-progress", (progress) => {
-    if (mainWindow) {
-      mainWindow.setProgressBar(progress.percent / 100);
-    }
-  });
+      const totalBytes = parseInt(response.headers["content-length"] || "0");
+      let receivedBytes = 0;
+      const chunks = [];
 
-  autoUpdater.on("error", (err) => {
-    console.log("Auto-update error:", err.message);
-    if (mainWindow) {
-      dialog.showMessageBox(mainWindow, {
-        type: "error",
-        title: "Update Error",
-        message: `Update failed: ${err.message}`,
+      response.on("data", (chunk) => {
+        chunks.push(chunk);
+        receivedBytes += chunk.length;
+        const percent = totalBytes > 0 ? Math.round((receivedBytes / totalBytes) * 100) : 0;
+        sendUpdateStatus("downloading", { percent });
+        if (mainWindow) mainWindow.setProgressBar(percent / 100);
       });
+
+      response.on("end", () => {
+        try {
+          fs.writeFileSync(zipPath, Buffer.concat(chunks));
+          if (mainWindow) mainWindow.setProgressBar(-1);
+          installUpdate(tmpDir, zipPath, version);
+        } catch (err) {
+          sendUpdateStatus("error", { message: err.message });
+          showUpdateError(err.message);
+          cleanup(tmpDir);
+        }
+      });
+    });
+
+    request.on("error", (err) => {
+      sendUpdateStatus("error", { message: err.message });
+      showUpdateError(err.message);
+      cleanup(tmpDir);
+    });
+
+    request.end();
+  };
+
+  downloadFile(zipUrl);
+}
+
+function installUpdate(tmpDir, zipPath, version) {
+  sendUpdateStatus("installing");
+
+  const extractDir = path.join(tmpDir, "extracted");
+  fs.mkdirSync(extractDir, { recursive: true });
+
+  // Unzip
+  execFile("ditto", ["-xk", zipPath, extractDir], (err) => {
+    if (err) {
+      sendUpdateStatus("error", { message: "Failed to extract update" });
+      showUpdateError("Failed to extract update: " + err.message);
+      cleanup(tmpDir);
+      return;
     }
+
+    // Find the .app in the extracted directory
+    const appName = "Filey.app";
+    const extractedApp = path.join(extractDir, appName);
+    if (!fs.existsSync(extractedApp)) {
+      sendUpdateStatus("error", { message: "Filey.app not found in update" });
+      showUpdateError("Filey.app not found in the downloaded update.");
+      cleanup(tmpDir);
+      return;
+    }
+
+    // Get current app path
+    const currentApp = path.dirname(path.dirname(path.dirname(app.getAppPath())));
+    if (!currentApp.endsWith(".app")) {
+      sendUpdateStatus("error", { message: "Cannot determine app location" });
+      showUpdateError("Cannot determine the current app location for replacement.");
+      cleanup(tmpDir);
+      return;
+    }
+
+    // Ad-hoc re-sign the extracted app (strip any xattrs first)
+    execFile("xattr", ["-cr", extractedApp], () => {
+      execFile("codesign", ["--force", "--deep", "--sign", "-", extractedApp], (signErr) => {
+        if (signErr) console.log("Re-sign warning:", signErr.message);
+
+        // Write a small shell script that waits for the app to quit, replaces it, and relaunches
+        const updateScript = path.join(tmpDir, "apply-update.sh");
+        fs.writeFileSync(updateScript, `#!/bin/bash
+# Wait for the app to quit
+sleep 2
+# Replace the app
+rm -rf "${currentApp}"
+mv "${extractedApp}" "${currentApp}"
+# Clean up
+rm -rf "${tmpDir}"
+# Relaunch
+open "${currentApp}"
+`, { mode: 0o755 });
+
+        sendUpdateStatus("restarting");
+
+        dialog.showMessageBox(mainWindow, {
+          type: "info",
+          title: "Update Ready",
+          message: `Filey v${version} is ready. The app will restart now.`,
+          buttons: ["Restart Now"],
+        }).then(() => {
+          // Launch the update script and quit
+          execFile("/bin/bash", [updateScript], { detached: true, stdio: "ignore" }).unref();
+          app.quit();
+        });
+      });
+    });
   });
 }
 
-function checkForUpdates(manual) {
-  if (manual) {
-    autoUpdater.once("update-not-available", () => {
-      dialog.showMessageBox(mainWindow, {
-        type: "info",
-        title: "No Updates",
-        message: `Filey is up to date (v${getDisplayVersion()}).`,
-      });
-    });
-    autoUpdater.once("error", (err) => {
-      dialog.showMessageBox(mainWindow, {
-        type: "error",
-        title: "Update Error",
-        message: `Could not check for updates: ${err.message}`,
-      });
-    });
-  }
-  autoUpdater.checkForUpdates();
+function cleanup(tmpDir) {
+  try { fs.rmSync(tmpDir, { recursive: true }); } catch (_) {}
+  if (mainWindow) mainWindow.setProgressBar(-1);
+}
+
+function showUpToDate() {
+  dialog.showMessageBox(mainWindow, {
+    type: "info",
+    title: "No Updates",
+    message: `Filey is up to date (v${getDisplayVersion()}).`,
+  });
+}
+
+function showUpdateError(msg) {
+  if (mainWindow) mainWindow.setProgressBar(-1);
+  dialog.showMessageBox(mainWindow, {
+    type: "error",
+    title: "Update Error",
+    message: `Update failed: ${msg}`,
+  });
 }
 
 // --- App Menu ---
@@ -184,7 +342,6 @@ app.whenReady().then(() => {
     buildMenu();
     createWindow();
     if (isPackaged) {
-      setupAutoUpdater();
       setTimeout(() => checkForUpdates(false), 3000);
     }
   }, 500);

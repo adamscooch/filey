@@ -1269,6 +1269,57 @@ input[type="number"]::-webkit-outer-spin-button {
   max-height: 85vh;
 }
 
+/* --- Update overlay --- */
+.update-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20000;
+  background: rgba(18, 16, 16, 0.88);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.3s ease;
+}
+
+.update-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.update-overlay-content {
+  text-align: center;
+  max-width: 340px;
+}
+
+.update-overlay-text {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  letter-spacing: 0.3px;
+}
+
+.update-overlay-bar-wrap {
+  width: 280px;
+  height: 4px;
+  background: var(--bg-surface);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 0 auto;
+}
+
+.update-overlay-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
 /* --- Transcript result --- */
 
 .transcript-box {

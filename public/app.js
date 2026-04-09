@@ -1732,3 +1732,61 @@ imageCard.config.onFilesReady = (card) => {
 fetch("/api/version").then(r => r.json()).then(d => {
   document.getElementById("app-version").textContent = "v" + d.version;
 }).catch(() => {});
+
+// --- Update overlay (Electron only) ---
+if (window.fileyUpdater) {
+  const overlay = document.createElement("div");
+  overlay.id = "update-overlay";
+  overlay.className = "update-overlay hidden";
+
+  const content = document.createElement("div");
+  content.className = "update-overlay-content";
+
+  const textEl = document.createElement("div");
+  textEl.className = "update-overlay-text";
+  textEl.id = "update-overlay-text";
+  textEl.textContent = "Checking for updates...";
+
+  const barWrap = document.createElement("div");
+  barWrap.className = "update-overlay-bar-wrap";
+
+  const barEl = document.createElement("div");
+  barEl.className = "update-overlay-bar";
+  barEl.id = "update-overlay-bar";
+
+  barWrap.appendChild(barEl);
+  content.appendChild(textEl);
+  content.appendChild(barWrap);
+  overlay.appendChild(content);
+  document.body.appendChild(overlay);
+
+  window.fileyUpdater.onUpdateStatus((data) => {
+    const text = document.getElementById("update-overlay-text");
+    const bar = document.getElementById("update-overlay-bar");
+    if (!text || !bar) return;
+
+    switch (data.status) {
+      case "downloading":
+        overlay.classList.remove("hidden");
+        text.textContent = "Downloading update... " + (data.percent || 0) + "%";
+        bar.style.width = (data.percent || 0) + "%";
+        break;
+      case "installing":
+        overlay.classList.remove("hidden");
+        text.textContent = "Installing update...";
+        bar.style.width = "100%";
+        break;
+      case "restarting":
+        overlay.classList.remove("hidden");
+        text.textContent = "Restarting...";
+        bar.style.width = "100%";
+        break;
+      case "error":
+        overlay.classList.add("hidden");
+        break;
+      default:
+        overlay.classList.add("hidden");
+        break;
+    }
+  });
+}
