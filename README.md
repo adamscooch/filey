@@ -10,7 +10,7 @@
 
 ## Why I Built This
 
-I manage e-commerce for a phone case brand. Every day I'm uploading product photos to Shopify, rebuilding landing pages, compressing videos for ads, converting screenshots for email campaigns. The file prep alone was eating hours out of my week.
+I manage ecommerce websites and email marketing for multiple brands. Every day I'm uploading product photos to Shopify, rebuilding landing pages, compressing videos for PDPs, converting screenshots for email campaigns. The file prep alone was eating a lot of time.
 
 I had ImageOptim for lossless JPEG compression. Permute for video conversion. HandBrake when I needed more codec control. Gifski for making GIFs from video clips. PDF Squeezer for compressing sell sheets. A separate app for resizing. Another for format conversion. Another for metadata stripping.
 
@@ -18,7 +18,7 @@ That's six or seven apps just to get files ready to upload. I'd drag a PNG into 
 
 Filey does all of it. Drop your files in, pick your settings, get compressed output. One app, one window. Everything runs locally on your machine, nothing gets uploaded anywhere.
 
-It's still a beta. There are rough edges and missing features. But it already handles the daily workflow that used to require half a dozen paid apps.
+It's still a beta. And I don't claim to be an app developer. I'm a rookie vibecoder that usually works on ecom stuff. This app has rough edges and missing features. But it already handles the daily workflow that used to require half a dozen paid apps. PLEASE give your feedback by opening issues. I'd love to make this thing bug-free and feature-rich, but also still be simple to use. Handbrake was a visual nightmare for me lol.
 
 ## What It Does
 
