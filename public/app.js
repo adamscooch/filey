@@ -371,35 +371,50 @@ class ToolCard {
     try {
       const allResults = [];
       const allErrors = [];
+      const CONCURRENCY = 4;
 
-      for (let i = 0; i < total; i++) {
+      let completed = 0;
+      const updateProgress = () => {
         if (total > 1) {
-          this.progressText.textContent = `Processing ${i + 1} of ${total}...`;
-          this.batchCounter.textContent = `File: ${this.pendingFiles[i].name}`;
+          this.progressText.textContent = `Processing ${completed} of ${total}...`;
           this.batchCounter.classList.remove("hidden");
         }
+      };
 
-        const singleFile = this.pendingFiles[i];
-        const payload = this.config.getPayload(this, singleFile);
-        const res = await fetch(this.config.apiEndpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+      // Process files in parallel batches
+      for (let i = 0; i < total; i += CONCURRENCY) {
+        const batch = this.pendingFiles.slice(i, i + CONCURRENCY);
+        updateProgress();
+        if (total > 1) {
+          this.batchCounter.textContent = batch.map(f => f.name).join(", ");
+        }
+
+        const batchPromises = batch.map(async (singleFile) => {
+          const payload = this.config.getPayload(this, singleFile);
+          const res = await fetch(this.config.apiEndpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          completed++;
+          updateProgress();
+          return data;
         });
 
-        const data = await res.json();
-        if (data.results) allResults.push(...data.results);
-        if (data.errors) allErrors.push(...data.errors);
-
-        // Update quality slider with server's actual quality (for target size mode)
-        if (data.results) {
-          for (const r of data.results) {
-            if (r.qualityUsed !== undefined) {
-              const slider = this.el.querySelector(".quality-slider");
-              const valSpan = this.el.querySelector(".slider-val");
-              if (slider && valSpan) {
-                slider.value = r.qualityUsed;
-                valSpan.textContent = r.qualityUsed;
+        const batchResults = await Promise.all(batchPromises);
+        for (const data of batchResults) {
+          if (data.results) allResults.push(...data.results);
+          if (data.errors) allErrors.push(...data.errors);
+          if (data.results) {
+            for (const r of data.results) {
+              if (r.qualityUsed !== undefined) {
+                const slider = this.el.querySelector(".quality-slider");
+                const valSpan = this.el.querySelector(".slider-val");
+                if (slider && valSpan) {
+                  slider.value = r.qualityUsed;
+                  valSpan.textContent = r.qualityUsed;
+                }
               }
             }
           }
