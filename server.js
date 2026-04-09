@@ -458,7 +458,10 @@ async function processImage(inputPath, options = {}) {
     // Copy file first, then strip in-place
     fs.copyFileSync(inputPath, outputPath);
     try {
-      await exiftool.write(outputPath, {}, ["-all=", "-overwrite_original"]);
+      await Promise.race([
+        exiftool.write(outputPath, {}, ["-all=", "-overwrite_original"]),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("exiftool timeout")), 15000)),
+      ]);
     } catch (e) {
       // If exiftool fails (unsupported format), fall through to sharp
       fs.unlinkSync(outputPath);
@@ -576,7 +579,10 @@ async function processImageWithSharp(inputPath, outputPath, metadata, outFmt, qu
   // Strip metadata from output if requested (after encoding)
   if (stripMeta) {
     try {
-      await exiftool.write(outputPath, {}, ["-all=", "-overwrite_original"]);
+      await Promise.race([
+        exiftool.write(outputPath, {}, ["-all=", "-overwrite_original"]),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("exiftool timeout")), 15000)),
+      ]);
     } catch (_) {
       // Non-critical — metadata stripping is best-effort after conversion
     }
@@ -612,7 +618,10 @@ async function processImageWithSharp(inputPath, outputPath, metadata, outFmt, qu
     fs.copyFileSync(originalInputPath, outputPath);
     if (stripMeta) {
       try {
-        await exiftool.write(outputPath, {}, ["-all=", "-overwrite_original"]);
+        await Promise.race([
+        exiftool.write(outputPath, {}, ["-all=", "-overwrite_original"]),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("exiftool timeout")), 15000)),
+      ]);
       } catch (_) {}
     }
     outputSize = fs.statSync(outputPath).size;

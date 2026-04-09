@@ -228,12 +228,17 @@ function downloadAndInstall(zipUrl, version) {
   showProgressWindow(version);
 
   // Download the ZIP using https module (follows redirects, proper timeout handling)
-  const downloadFile = (url) => {
-    const parsedUrl = new URL(url);
+  const downloadFile = (url, redirectCount = 0) => {
+    if (redirectCount > 5) {
+      closeProgressWindow();
+      showUpdateError("Too many redirects while downloading update.");
+      cleanup(tmpDir);
+      return;
+    }
     const req = https.get(url, { headers: { "User-Agent": "Filey-Updater" }, timeout: 300000 }, (response) => {
       // Handle redirects (GitHub serves assets via S3 redirect)
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-        downloadFile(response.headers.location);
+        downloadFile(response.headers.location, redirectCount + 1);
         return;
       }
 
