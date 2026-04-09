@@ -28,8 +28,6 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 840,
     height: 720,
-    maxWidth: 960,
-    maxHeight: 820,
     title: "Filey",
     titleBarStyle: "hiddenInset",
     backgroundColor: "#171411",
