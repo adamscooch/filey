@@ -94,9 +94,22 @@ ASSETS=()
 [ -f "$ZIP" ] && ASSETS+=("$ZIP")
 [ -f "$YML" ] && ASSETS+=("$YML")
 
+# Generate changelog from commits since last tag
+PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+if [ -n "$PREV_TAG" ]; then
+  CHANGELOG=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --no-merges | grep -v "Co-Authored-By" | head -20)
+else
+  CHANGELOG="Initial release"
+fi
+
+RELEASE_NOTES="## What's New
+
+${CHANGELOG}
+"
+
 gh release create "v${DISPLAY_VERSION}" \
   --title "Filey v${DISPLAY_VERSION}" \
-  --notes "Filey v${DISPLAY_VERSION}" \
+  --notes "$RELEASE_NOTES" \
   "${ASSETS[@]}"
 
 echo ""
