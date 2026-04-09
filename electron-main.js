@@ -314,16 +314,15 @@ function installUpdate(tmpDir, zipPath, version) {
       return;
     }
 
-    // Ad-hoc re-sign the extracted app (strip any xattrs first)
-    execFile("xattr", ["-cr", extractedApp], () => {
-      execFile("codesign", ["--force", "--deep", "--sign", "-", extractedApp], (signErr) => {
-        if (signErr) console.log("Re-sign warning:", signErr.message);
-
-        // Write a small shell script that waits for the app to quit, replaces it, and relaunches
-        const updateScript = path.join(tmpDir, "apply-update.sh");
-        fs.writeFileSync(updateScript, `#!/bin/bash
+    // Write a shell script that handles xattr stripping, codesign, app replacement, and relaunch
+    // This runs AFTER the app quits so it doesn't block the UI
+    const updateScript = path.join(tmpDir, "apply-update.sh");
+    fs.writeFileSync(updateScript, `#!/bin/bash
 # Wait for the app to quit
 sleep 2
+# Strip xattrs and re-sign
+xattr -cr "${extractedApp}" 2>/dev/null
+codesign --force --deep --sign - "${extractedApp}" 2>/dev/null
 # Replace the app
 rm -rf "${currentApp}"
 mv "${extractedApp}" "${currentApp}"
@@ -333,19 +332,16 @@ rm -rf "${tmpDir}"
 open "${currentApp}"
 `, { mode: 0o755 });
 
-        closeProgressWindow();
+    closeProgressWindow();
 
-        dialog.showMessageBox(mainWindow, {
-          type: "info",
-          title: "Update Ready",
-          message: `Filey v${version} is ready to install.`,
-          buttons: ["Restart Filey Now"],
-        }).then(() => {
-          // Launch the update script and quit
-          execFile("/bin/bash", [updateScript], { detached: true, stdio: "ignore" }).unref();
-          app.quit();
-        });
-      });
+    dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title: "Update Ready",
+      message: `Filey v${version} is ready to install.`,
+      buttons: ["Restart Filey Now"],
+    }).then(() => {
+      execFile("/bin/bash", [updateScript], { detached: true, stdio: "ignore" }).unref();
+      app.quit();
     });
   });
 }
