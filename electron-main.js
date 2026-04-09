@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, dialog, Menu, net } = require("electron");
+const { app, BrowserWindow, shell, dialog, Menu, net, ipcMain } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { execFile } = require("child_process");
@@ -22,6 +22,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 840,
     height: 720,
+    maxWidth: 960,
+    maxHeight: 820,
     title: "Filey",
     titleBarStyle: "hiddenInset",
     backgroundColor: "#171411",
@@ -345,6 +347,11 @@ function buildMenu() {
 
 app.whenReady().then(() => {
   require("./server.js");
+
+  // IPC: renderer can request update check
+  ipcMain.on("check-for-updates", () => {
+    checkForUpdates(true);
+  });
 
   setTimeout(() => {
     buildMenu();

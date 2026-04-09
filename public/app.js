@@ -1733,6 +1733,16 @@ fetch("/api/version").then(r => r.json()).then(d => {
   document.getElementById("app-version").textContent = "v" + d.version;
 }).catch(() => {});
 
+// --- Check for updates button ---
+document.getElementById("check-for-updates")?.addEventListener("click", () => {
+  if (window.fileyUpdater) {
+    window.fileyUpdater.checkForUpdates();
+  } else {
+    // Running in browser, not Electron
+    window.open("https://github.com/adamscooch/filey/releases/latest", "_blank");
+  }
+});
+
 // --- Update overlay (Electron only) ---
 if (window.fileyUpdater) {
   const overlay = document.createElement("div");
