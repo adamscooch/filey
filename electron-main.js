@@ -1,7 +1,13 @@
 const { app, BrowserWindow, shell, dialog, Menu, net, ipcMain } = require("electron");
+const https = require("https");
 const path = require("path");
 const fs = require("fs");
 const { execFile } = require("child_process");
+
+// Prevent uncaught exceptions from crashing the app with ugly dialog
+process.on("uncaughtException", (err) => {
+  console.log("Uncaught exception:", err.message);
+});
 
 // Determine if running from packaged app or dev
 const isPackaged = app.isPackaged;
@@ -79,61 +85,72 @@ function checkForUpdates(manual) {
   const currentSemver = require("./package.json").version;
   const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
 
-  const request = net.request(url);
-  request.setHeader("User-Agent", "Filey-Updater");
-
-  let body = "";
-  request.on("response", (response) => {
-    response.on("data", (chunk) => { body += chunk.toString(); });
-    response.on("end", () => {
-      try {
-        const release = JSON.parse(body);
-        const tagName = release.tag_name || "";
-        const latestDisplay = tagName.replace(/^v/, "");
-
-        // Find the ZIP asset (electron-updater uses ZIP for macOS)
-        const zipAsset = (release.assets || []).find(a => a.name.endsWith("-mac.zip") || a.name.endsWith("-arm64-mac.zip"));
-
-        const latestParts = latestDisplay.match(/^(\d{2})(\d{4})\.(\d+)$/);
-        if (!latestParts) {
-          if (manual) showUpToDate();
-          return;
-        }
-        const latestSemver = `${latestParts[1]}.${parseInt(latestParts[2])}.${latestParts[3]}`;
-        const current = semverToComparable(currentSemver);
-        const latest = semverToComparable(latestSemver);
-
-        if (latest > current && zipAsset) {
-          sendUpdateStatus("available", { version: latestDisplay });
-          dialog.showMessageBox(mainWindow, {
-            type: "info",
-            title: "Update Available",
-            message: `Filey v${latestDisplay} is available (you have v${getDisplayVersion()}).`,
-            buttons: ["Download & Install", "Later"],
-            defaultId: 0,
-          }).then((result) => {
-            if (result.response === 0) {
-              downloadAndInstall(zipAsset.browser_download_url, latestDisplay);
-            } else {
-              sendUpdateStatus("idle");
-            }
-          });
-        } else if (manual) {
-          showUpToDate();
-        }
-      } catch (err) {
-        console.log("Update check failed:", err.message);
-        if (manual) showUpdateError(err.message);
-      }
-    });
+  const req = https.get(url, { headers: { "User-Agent": "Filey-Updater" }, timeout: 10000 }, (response) => {
+    // Follow redirects
+    if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+      https.get(response.headers.location, { headers: { "User-Agent": "Filey-Updater" }, timeout: 10000 }, (res2) => {
+        handleUpdateResponse(res2, currentSemver, manual);
+      }).on("error", (err) => {
+        console.log("Update check redirect error:", err.message);
+        if (manual) showUpdateError("Could not reach GitHub. Check your internet connection.");
+      });
+      return;
+    }
+    handleUpdateResponse(response, currentSemver, manual);
   });
 
-  request.on("error", (err) => {
+  req.on("error", (err) => {
     console.log("Update check error:", err.message);
-    if (manual) showUpdateError(err.message);
+    if (manual) showUpdateError("Could not reach GitHub. Check your internet connection.");
   });
 
-  request.end();
+  req.on("timeout", () => {
+    req.destroy();
+    console.log("Update check timed out");
+    if (manual) showUpdateError("Update check timed out. Check your internet connection.");
+  });
+}
+
+function handleUpdateResponse(response, currentSemver, manual) {
+  let body = "";
+  response.on("data", (chunk) => { body += chunk; });
+  response.on("end", () => {
+    try {
+      const release = JSON.parse(body);
+      const tagName = release.tag_name || "";
+      const latestDisplay = tagName.replace(/^v/, "");
+
+      const zipAsset = (release.assets || []).find(a => a.name.endsWith("-mac.zip") || a.name.endsWith("-arm64-mac.zip"));
+
+      const latestParts = latestDisplay.match(/^(\d{2})(\d{4})\.(\d+)$/);
+      if (!latestParts) {
+        if (manual) showUpToDate();
+        return;
+      }
+      const latestSemver = `${latestParts[1]}.${parseInt(latestParts[2])}.${latestParts[3]}`;
+      const current = semverToComparable(currentSemver);
+      const latest = semverToComparable(latestSemver);
+
+      if (latest > current && zipAsset) {
+        dialog.showMessageBox(mainWindow, {
+          type: "info",
+          title: "Update Available",
+          message: `Filey v${latestDisplay} is available (you have v${getDisplayVersion()}).`,
+          buttons: ["Download & Install", "Later"],
+          defaultId: 0,
+        }).then((result) => {
+          if (result.response === 0) {
+            downloadAndInstall(zipAsset.browser_download_url, latestDisplay);
+          }
+        });
+      } else if (manual) {
+        showUpToDate();
+      }
+    } catch (err) {
+      console.log("Update check parse failed:", err.message);
+      if (manual) showUpdateError("Could not check for updates.");
+    }
+  });
 }
 
 // --- Progress window (native, no preload needed) ---
@@ -211,12 +228,10 @@ function downloadAndInstall(zipUrl, version) {
   // Show progress window
   showProgressWindow(version);
 
-  // Download the ZIP using net module (follows redirects)
+  // Download the ZIP using https module (follows redirects, proper timeout handling)
   const downloadFile = (url) => {
-    const request = net.request(url);
-    request.setHeader("User-Agent", "Filey-Updater");
-
-    request.on("response", (response) => {
+    const parsedUrl = new URL(url);
+    const req = https.get(url, { headers: { "User-Agent": "Filey-Updater" }, timeout: 300000 }, (response) => {
       // Handle redirects (GitHub serves assets via S3 redirect)
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
         downloadFile(response.headers.location);
@@ -249,13 +264,18 @@ function downloadAndInstall(zipUrl, version) {
       });
     });
 
-    request.on("error", (err) => {
+    req.on("error", (err) => {
       closeProgressWindow();
-      showUpdateError(err.message);
+      showUpdateError("Download failed: " + err.message);
       cleanup(tmpDir);
     });
 
-    request.end();
+    req.on("timeout", () => {
+      req.destroy();
+      closeProgressWindow();
+      showUpdateError("Download timed out. The update file may be too large for your connection. Try again later.");
+      cleanup(tmpDir);
+    });
   };
 
   downloadFile(zipUrl);

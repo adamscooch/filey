@@ -1,6 +1,6 @@
 {
   "name": "filey",
-  "version": "26.409.11",
+  "version": "26.409.12",
   "description": "Simple file compression, conversion, and manipulation tool",
   "main": "electron-main.js",
   "scripts": {
