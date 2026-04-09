@@ -24,6 +24,7 @@ BINARIES=(
   /opt/homebrew/bin/gifsicle
   /opt/homebrew/bin/gifski
   /opt/homebrew/bin/gs
+  /opt/homebrew/bin/whisper-cli
 )
 
 # Resolve @rpath references to actual file paths
@@ -220,6 +221,32 @@ for pass in $(seq 1 $MAX_PASSES); do
   done
   if [ "$found_new" = false ]; then break; fi
 done
+
+# Bundle whisper.cpp models
+WHISPER_MODEL_SRC="/opt/homebrew/share/whisper-cpp"
+if [ -d "$WHISPER_MODEL_SRC" ]; then
+  mkdir -p "$DEST/models"
+  for model in ggml-base.en.bin ggml-tiny.bin; do
+    if [ -f "$WHISPER_MODEL_SRC/$model" ]; then
+      echo "  MODEL: $model"
+      cp "$WHISPER_MODEL_SRC/$model" "$DEST/models/"
+    fi
+  done
+fi
+
+# Bundle ggml backend plugins (needed by whisper-cli)
+GGML_LIBEXEC="/opt/homebrew/Cellar/ggml/0.9.8/libexec"
+if [ -d "$GGML_LIBEXEC" ]; then
+  mkdir -p "$DEST/lib"
+  for so in "$GGML_LIBEXEC/"*.so; do
+    [ -f "$so" ] || continue
+    soname=$(basename "$so")
+    if [ ! -f "$DEST/lib/$soname" ]; then
+      echo "    GGML: $soname"
+      cp "$so" "$DEST/lib/$soname"
+    fi
+  done
+fi
 
 # Ad-hoc re-sign everything (required for macOS arm64)
 echo "=== Code signing ==="

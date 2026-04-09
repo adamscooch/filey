@@ -1265,21 +1265,59 @@ async function optimizeSvg(inputPath, suffix = "-filey") {
 
 // --- Video Transcriber ---
 
-// Auto-detect whisper binary: check common locations
+// Auto-detect whisper binary: prefer whisper-cli (C++, bundled), fall back to Python whisper
 const WHISPER_BIN = (() => {
-  const candidates = [
-    path.join(os.homedir(), "Library/Python/3.9/bin/whisper"),
-    path.join(os.homedir(), "Library/Python/3.11/bin/whisper"),
-    path.join(os.homedir(), "Library/Python/3.12/bin/whisper"),
-    path.join(os.homedir(), "Library/Python/3.13/bin/whisper"),
-    "/usr/local/bin/whisper",
-    "/opt/homebrew/bin/whisper",
+  // whisper-cli (whisper.cpp) — bundled or Homebrew
+  const cppCandidates = [
+    path.join(FILEY_BIN, "whisper-cli"),
+    "/opt/homebrew/bin/whisper-cli",
+    "/usr/local/bin/whisper-cli",
   ];
-  for (const c of candidates) {
-    try { if (fs.statSync(c)) return c; } catch (_) {}
+  for (const c of cppCandidates) {
+    try { if (fs.statSync(c)) return { bin: c, type: "cpp" }; } catch (_) {}
   }
-  return "whisper"; // fall back to PATH lookup
+  // Python whisper fallback
+  const pyCandidates = [
+    "/opt/homebrew/bin/whisper",
+    "/usr/local/bin/whisper",
+  ];
+  for (const c of pyCandidates) {
+    try { if (fs.statSync(c)) return { bin: c, type: "python" }; } catch (_) {}
+  }
+  return { bin: "whisper-cli", type: "cpp" };
 })();
+
+// Find the whisper model file (for whisper.cpp)
+const WHISPER_MODEL_DIR = (() => {
+  const candidates = [
+    path.join(FILEY_BIN, "models"),
+    "/opt/homebrew/share/whisper-cpp",
+    path.join(FILEY_BIN, "..", "models"),
+  ];
+  for (const d of candidates) {
+    try { if (fs.statSync(d).isDirectory()) return d; } catch (_) {}
+  }
+  return path.join(FILEY_BIN, "models");
+})();
+
+function getWhisperModelPath(model) {
+  // Map model names to ggml filenames
+  const modelMap = {
+    "tiny": "ggml-tiny.bin",
+    "base": "ggml-base.en.bin",
+    "small": "ggml-small.bin",
+    "medium": "ggml-medium.bin",
+  };
+  const fileName = modelMap[model] || `ggml-${model}.bin`;
+  const modelPath = path.join(WHISPER_MODEL_DIR, fileName);
+  try { fs.statSync(modelPath); return modelPath; } catch (_) {}
+  // Try without .en suffix
+  const altPath = path.join(WHISPER_MODEL_DIR, `ggml-${model}.bin`);
+  try { fs.statSync(altPath); return altPath; } catch (_) {}
+  return modelPath; // return expected path even if missing (will error with helpful message)
+}
+
+console.log(`Whisper: ${WHISPER_BIN.type} (${WHISPER_BIN.bin}), models: ${WHISPER_MODEL_DIR}`);
 
 async function transcribeVideo(inputPath, model = "base", language = "auto", outputFormat = "txt", suffix = "-transcript") {
   const ext = path.extname(inputPath);
@@ -1287,58 +1325,78 @@ async function transcribeVideo(inputPath, model = "base", language = "auto", out
   const dir = path.dirname(inputPath);
   const originalSize = fs.statSync(inputPath).size;
 
-  // Whisper outputs to a directory with the base name of the input file
-  // We'll use a temp dir for output, then rename
   const tmpDir = uniqueTmp("filey_whisper");
   fs.mkdirSync(tmpDir, { recursive: true });
 
-  const args = [inputPath, "--model", model, "--output_format", outputFormat, "--output_dir", tmpDir];
+  const outputBase = path.join(tmpDir, baseName);
 
-  if (language !== "auto") {
-    args.push("--language", language);
-  }
-
-  await new Promise((resolve, reject) => {
-    execFile(WHISPER_BIN, args, { timeout: 600000 }, (err, stdout, stderr) => {
-      if (err) return reject(new Error(stderr || err.message));
-      resolve(stdout);
-    });
-  });
-
-  // Find the output file whisper created
-  const whisperOutputName = `${baseName}.${outputFormat}`;
-  const whisperOutputPath = path.join(tmpDir, whisperOutputName);
-
-  if (!fs.existsSync(whisperOutputPath)) {
-    // Try to find any output file in the temp dir
-    const files = fs.readdirSync(tmpDir);
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-    throw new Error(`Transcription failed. No output file found. Files in tmp: ${files.join(", ")}`);
-  }
-
-  const finalName = `${baseName}${suffix}.${outputFormat}`;
-  const finalPath = path.join(dir, finalName);
-  let transcript;
   try {
-    transcript = fs.readFileSync(whisperOutputPath, "utf-8");
+    if (WHISPER_BIN.type === "cpp") {
+      // whisper.cpp requires 16kHz mono WAV input — convert first with ffmpeg
+      const wavPath = path.join(tmpDir, "input.wav");
+      await new Promise((resolve, reject) => {
+        execFile("ffmpeg", ["-i", inputPath, "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wavPath, "-y"],
+          { timeout: 120000 }, (err) => { if (err) reject(new Error("Failed to convert audio: " + err.message)); else resolve(); });
+      });
+
+      const modelPath = getWhisperModelPath(model);
+      const formatFlag = outputFormat === "srt" ? "-osrt" : outputFormat === "vtt" ? "-ovtt" : "-otxt";
+      const args = ["-m", modelPath, "-f", wavPath, "-of", outputBase, formatFlag];
+      if (language !== "auto") args.push("-l", language);
+
+      await new Promise((resolve, reject) => {
+        execFile(WHISPER_BIN.bin, args, { timeout: 600000, env: { ...process.env, DYLD_LIBRARY_PATH: FILEY_LIB } }, (err, stdout, stderr) => {
+          if (err) return reject(new Error(stderr || err.message));
+          resolve(stdout);
+        });
+      });
+    } else {
+      // Python whisper
+      const args = [inputPath, "--model", model, "--output_format", outputFormat, "--output_dir", tmpDir];
+      if (language !== "auto") args.push("--language", language);
+
+      await new Promise((resolve, reject) => {
+        execFile(WHISPER_BIN.bin, args, { timeout: 600000 }, (err, stdout, stderr) => {
+          if (err) return reject(new Error(stderr || err.message));
+          resolve(stdout);
+        });
+      });
+    }
+
+    // Find the output file
+    const expectedFile = `${outputBase}.${outputFormat}`;
+    let whisperOutputPath = expectedFile;
+    if (!fs.existsSync(whisperOutputPath)) {
+      // Search tmpDir for any matching output
+      const files = fs.readdirSync(tmpDir).filter(f => f.endsWith(`.${outputFormat}`));
+      if (files.length > 0) {
+        whisperOutputPath = path.join(tmpDir, files[0]);
+      } else {
+        const allFiles = fs.readdirSync(tmpDir);
+        throw new Error(`Transcription produced no output. Files: ${allFiles.join(", ") || "none"}`);
+      }
+    }
+
+    const finalName = `${baseName}${suffix}.${outputFormat}`;
+    const finalPath = path.join(dir, finalName);
+    const transcript = fs.readFileSync(whisperOutputPath, "utf-8");
     fs.copyFileSync(whisperOutputPath, finalPath);
+    const outputSize = fs.statSync(finalPath).size;
+
+    return {
+      originalName: path.basename(inputPath),
+      originalSize,
+      outputName: finalName,
+      outputSize,
+      savedTo: finalPath,
+      transcript: transcript.trim(),
+      model,
+      language: language === "auto" ? "auto-detected" : language,
+      outputFormat,
+    };
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
-
-  const outputSize = fs.statSync(finalPath).size;
-
-  return {
-    originalName: path.basename(inputPath),
-    originalSize,
-    outputName: finalName,
-    outputSize,
-    savedTo: finalPath,
-    transcript: transcript.trim(),
-    model,
-    language: language === "auto" ? "auto-detected" : language,
-    outputFormat,
-  };
 }
 
 // --- API Endpoints ---
@@ -1824,7 +1882,7 @@ app.get("/api/status", (req, res) => {
     // PDF
     ghostscript: !!GS_BIN,
     // Transcription
-    whisper: (() => { try { fs.statSync(WHISPER_BIN); return true; } catch (_) { return false; } })(),
+    whisper: (() => { try { fs.statSync(WHISPER_BIN.bin); return true; } catch (_) { return false; } })(),
   };
 
   const coreOk = HAS_FFMPEG;
@@ -1846,7 +1904,7 @@ app.get("/api/status", (req, res) => {
       core: "npm install && brew install ffmpeg",
       optimization: "brew install mozjpeg oxipng pngquant jpegoptim advancecomp zopfli gifsicle gifski",
       svg: "npm install -g svgo",
-      transcription: "pip3 install openai-whisper",
+      transcription: "brew install whisper-cpp",
     },
   });
 });
