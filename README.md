@@ -1,14 +1,26 @@
 # Filey
 
-One free app to replace ImageOptim, HandBrake, Gifski, PDF Squeezer, and more. Local processing, no uploads, no subscriptions.
+### [Download the latest version for Mac](https://github.com/adamscooch/filey/releases/latest)
 
-[![Download Filey](https://img.shields.io/badge/Download-Filey%20for%20Mac-E8923A?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/adamscooch/filey/releases/latest/download/Filey-26.409.2-arm64.dmg) ![Version](https://img.shields.io/github/v/release/adamscooch/filey) ![macOS](https://img.shields.io/badge/macOS-arm64-blue) ![License](https://img.shields.io/badge/license-MIT-green)
+![Version](https://img.shields.io/github/v/release/adamscooch/filey) ![macOS](https://img.shields.io/badge/macOS-arm64-blue) ![License](https://img.shields.io/badge/license-MIT-green)
+
+> **Note:** Filey is in beta. If you find bugs or have feature ideas, [open an issue](https://github.com/adamscooch/filey/issues).
+
+## Why I Built This
+
+I manage e-commerce for a phone case brand. Every day I'm uploading product photos to Shopify, rebuilding landing pages, compressing videos for ads, converting screenshots for email campaigns. The file prep alone was eating hours out of my week.
+
+I had ImageOptim for lossless JPEG compression. Permute for video conversion. HandBrake when I needed more codec control. Gifski for making GIFs from video clips. PDF Squeezer for compressing sell sheets. A separate app for resizing. Another for format conversion. Another for metadata stripping.
+
+That's six or seven apps just to get files ready to upload. I'd drag a PNG into one app to resize it, then drag the output into another app to convert it to JPEG, then drag that into a third app to compress it. Three apps, three windows, three sets of settings for what should be one operation.
+
+Filey does all of it. Drop your files in, pick your settings, get compressed output. One app, one window. Everything runs locally on your machine, nothing gets uploaded anywhere.
+
+It's still a beta. There are rough edges and missing features. But it already handles the daily workflow that used to require half a dozen paid apps.
 
 ## What It Does
 
-Filey is a file compression and conversion toolkit for macOS. Drop files in, get smaller files out. Everything runs locally on your machine.
-
-### Tools
+Drop files in, get smaller files out. Six tools in one window.
 
 | Tool | What it does | Powered by |
 |------|-------------|------------|
@@ -19,63 +31,31 @@ Filey is a file compression and conversion toolkit for macOS. Drop files in, get
 | **Transcriber** | Local speech-to-text from video or audio. Multiple models, SRT/VTT/TXT output. | OpenAI Whisper |
 | **SVG Optimizer** | Lossless SVG optimization with multipass. | svgo |
 
-### Features
+### Other stuff
 
 - Drag and drop everything
-- Batch processing with total estimates
-- Before/after comparison slider with fullscreen modal
+- Batch processing with size estimates
+- Before/after comparison slider with fullscreen view
 - Custom output suffix (default `-filey`)
 - Never-bigger guarantee on images and PDFs
 - ImageOptim-style optimization pipeline (MozJPEG + OxiPNG + pngquant)
 - Auto-updates from GitHub Releases
-- Content Security Policy headers
 - All processing is local, nothing leaves your machine
+- All CLI tools are bundled in the app, no Homebrew or terminal needed
 
 ## Install
 
-### Download
+Download the DMG from the [latest release](https://github.com/adamscooch/filey/releases/latest). Open it, drag Filey to Applications.
 
-Grab the latest DMG from [Releases](https://github.com/adamscooch/filey/releases). Open the DMG, drag Filey to Applications.
+On first launch, macOS may say it can't verify the app. Right-click the app icon and choose "Open" to get past this. You only have to do it once.
 
-On first launch, macOS may warn about unverified software. Right-click the app and choose "Open" to bypass Gatekeeper.
+Filey auto-updates. When a new version is available, the app will ask if you want to download and install it.
 
-### Build from Source
+## Feedback
 
-Requires Node.js 18+ and Homebrew.
+This is a beta. Things will break. If something doesn't work right, or if you have an idea for a feature:
 
-```bash
-# Clone
-git clone https://github.com/adamscooch/filey.git
-cd filey
-
-# Install Node dependencies
-npm install
-
-# Install CLI tools (optional, for full optimization)
-brew install mozjpeg oxipng pngquant jpegoptim advancecomp zopfli gifsicle gifski ghostscript ffmpeg
-npm install -g svgo
-pip3 install openai-whisper  # for transcription
-
-# Run in browser (development)
-npm start
-# Opens at http://localhost:3456
-
-# Run as Electron app
-npm run electron
-
-# Build distributable
-npm run release
-```
-
-All CLI tools are optional. Filey gracefully falls back to sharp/FFmpeg if optimization tools aren't installed. The Electron build bundles all detected tools automatically.
-
-## Architecture
-
-- **Backend:** Node.js + Express (`server.js`)
-- **Frontend:** Vanilla HTML/CSS/JS (`public/`)
-- **Desktop:** Electron with frameless window (`electron-main.js`)
-- **Bundling:** `bundle-tools.sh` copies Homebrew binaries + dylibs, rewrites paths for portability
-- **Releases:** `release.sh` handles bundle, build (in /tmp to avoid iCloud xattr issues), git tag, and GitHub Release upload
+[Open an issue on GitHub](https://github.com/adamscooch/filey/issues)
 
 ## Apps It Replaces
 
@@ -87,6 +67,19 @@ All CLI tools are optional. Filey gracefully falls back to sharp/FFmpeg if optim
 | Video Compressor | Target file size with 2-pass encoding |
 | Gifski | High-quality video-to-GIF with cross-frame palettes |
 | PDF Squeezer | PDF compression with quality presets |
+
+## Build from Source
+
+Requires Node.js 18+ and Homebrew. Most people should just download the app above.
+
+```bash
+git clone https://github.com/adamscooch/filey.git
+cd filey
+npm install
+npm start          # Run in browser at localhost:3456
+npm run electron   # Run as desktop app
+npm run release    # Build and publish a release
+```
 
 ## License
 
