@@ -184,7 +184,7 @@ function showProgressWindow(version) {
     .pct { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 8px; text-align: right; font-variant-numeric: tabular-nums; }
   </style></head><body>
     <div class="title" id="title">Downloading Filey v${version}</div>
-    <div class="sub" id="sub">This will only take a moment...</div>
+    <div class="sub" id="sub">This might take a minute...</div>
     <div class="bar-wrap"><div class="bar" id="bar"></div></div>
     <div class="pct" id="pct">0%</div>
   </body></html>`;
