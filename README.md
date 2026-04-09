@@ -1,8 +1,10 @@
 # Filey
 
-### [Download the latest version for Mac](https://github.com/adamscooch/filey/releases/latest)
+[![Download Filey for Mac](https://img.shields.io/badge/Download_for_Mac-Latest_Version-2ea44f?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/adamscooch/filey/releases/latest)
 
 ![Version](https://img.shields.io/github/v/release/adamscooch/filey) ![macOS](https://img.shields.io/badge/macOS-arm64-blue) ![License](https://img.shields.io/badge/license-MIT-green)
+
+*macOS only for now. Windows support is on the roadmap.*
 
 > **Note:** Filey is in beta. If you find bugs or have feature ideas, [open an issue](https://github.com/adamscooch/filey/issues).
 
@@ -81,6 +83,14 @@ npm run electron   # Run as desktop app
 npm run release    # Build and publish a release
 ```
 
+## Like it?
+
+If Filey saves you time, [give it a star on GitHub](https://github.com/adamscooch/filey). It helps other people find it.
+
 ## License
 
 MIT
+
+## Author
+
+Built by [Adam Anderson](https://github.com/adamscooch) at [Scooch](https://scooch.com).
