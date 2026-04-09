@@ -39,6 +39,14 @@ function createWindow() {
     return { action: "deny" };
   });
 
+  // Intercept in-page link clicks to external URLs — open in system browser
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (!url.startsWith("http://localhost")) {
+      event.preventDefault();
+      if (url.startsWith("https://")) shell.openExternal(url);
+    }
+  });
+
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
