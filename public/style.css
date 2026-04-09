@@ -374,6 +374,14 @@ h1 {
   gap: 6px;
 }
 
+.file-loading {
+  padding: 14px;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-faint);
+  font-weight: 500;
+}
+
 .file-item {
   padding: 10px 14px;
   background: var(--bg-inset);

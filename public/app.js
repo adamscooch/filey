@@ -202,27 +202,39 @@ class ToolCard {
       );
     }
 
+    // Show loading indicator while locating files
+    if (isFirstDrop && validFiles.length > 1) {
+      this.fileList.classList.remove("hidden");
+      this.fileList.textContent = "";
+      const loadingEl = document.createElement("div");
+      loadingEl.className = "file-loading";
+      loadingEl.textContent = `Loading ${validFiles.length} files...`;
+      this.fileList.appendChild(loadingEl);
+    }
+
+    let located = 0;
     const locating = validFiles.map(async (f) => {
       try {
-        // Use path from drag event if available (instant, no search needed)
-        // Electron sets file.path directly on File objects from drag events
         const electronPath = f.path;
         const knownPath = electronPath || dragPaths[f.name];
-        // Trust Electron paths directly (no verify roundtrip needed)
         const diskPath = electronPath
           ? electronPath
           : knownPath
             ? await verifyPath(knownPath, f.name, f.size)
             : await locateFile(f.name, f.size);
         this.pendingFiles.push({ name: f.name, size: f.size, path: diskPath });
+        located++;
+        // Update loading progress
+        const loadingEl = this.fileList.querySelector(".file-loading");
+        if (loadingEl) loadingEl.textContent = `Loading files... ${located} of ${validFiles.length}`;
         return { name: f.name, size: f.size, path: diskPath };
       } catch (err) {
+        located++;
         return { name: f.name, size: f.size, error: err.message };
       }
     });
 
     await Promise.all(locating);
-    // Re-render full file list from pendingFiles
     this.renderFileList(this.pendingFiles);
 
     this.fileList.classList.remove("hidden");
