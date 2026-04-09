@@ -166,10 +166,22 @@ class ToolCard {
 
     // Size unit toggles (now <select> dropdowns — no handler needed)
 
-    // Close/reset results
+    // Close individual result cards, or reset all if none left
     this.results.addEventListener("click", (e) => {
-      if (e.target.closest(".results-close-btn")) {
-        this.reset();
+      const closeBtn = e.target.closest(".results-close-btn");
+      if (!closeBtn) return;
+      const card = closeBtn.closest(".result-card");
+      if (card) {
+        card.style.transition = "opacity 0.2s ease, transform 0.2s ease";
+        card.style.opacity = "0";
+        card.style.transform = "translateY(8px)";
+        setTimeout(() => {
+          card.remove();
+          // If no result cards left, reset the tool
+          if (this.results.querySelectorAll(".result-card").length === 0) {
+            this.reset();
+          }
+        }, 200);
       }
     });
   }
@@ -407,7 +419,21 @@ class ToolCard {
         </div>`;
       }
 
-      this.results.innerHTML = html;
+      // Add "Clear All" button if multiple results
+      if (allResults.length + allErrors.length > 1) {
+        html += `<div class="results-clear-all"><button class="clear-all-btn">Clear All</button></div>`;
+      }
+
+      this.results.textContent = "";
+      const frag = document.createRange().createContextualFragment(html);
+      this.results.appendChild(frag);
+
+      // Bind clear all button
+      const clearAllBtn = this.results.querySelector(".clear-all-btn");
+      if (clearAllBtn) {
+        clearAllBtn.addEventListener("click", () => this.reset());
+      }
+
       this.progress.classList.add("hidden");
       this.batchCounter.classList.add("hidden");
       this.results.classList.remove("hidden");
@@ -1401,6 +1427,7 @@ const imageCard = new ToolCard({
       resize = { scale: parseInt(scaleVal) || 100 };
     }
 
+    const outputDest = card.el.querySelector(".output-dest")?.value || "same";
     const payload = {
       filePath: file.path,
       outputFormat: document.getElementById("ic-format").value,
@@ -1410,6 +1437,7 @@ const imageCard = new ToolCard({
       resize: resize,
       targetBytes: 0,
       suffix: getSuffix(card),
+      outputDir: outputDest,
     };
 
     if (mode === "quality") {

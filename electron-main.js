@@ -323,8 +323,11 @@ function installUpdate(tmpDir, zipPath, version) {
     // This runs AFTER the app quits so it doesn't block the UI
     const updateScript = path.join(tmpDir, "apply-update.sh");
     fs.writeFileSync(updateScript, `#!/bin/bash
-# Wait for the app to quit
-sleep 2
+# Wait for the app to fully quit
+sleep 3
+# Kill any lingering Filey processes
+pkill -f "Filey.app" 2>/dev/null
+sleep 1
 # Strip xattrs and re-sign
 xattr -cr "${extractedApp}" 2>/dev/null
 codesign --force --deep --sign - "${extractedApp}" 2>/dev/null
@@ -346,7 +349,9 @@ open "${currentApp}"
       buttons: ["Restart Filey Now"],
     }).then(() => {
       execFile("/bin/bash", [updateScript], { detached: true, stdio: "ignore" }).unref();
-      app.quit();
+      // app.quit() doesn't force-kill (Express server keeps process alive)
+      // app.exit() terminates immediately so the shell script can replace the .app
+      setTimeout(() => app.exit(0), 500);
     });
   });
 }

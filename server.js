@@ -441,7 +441,18 @@ async function processImage(inputPath, options = {}) {
     : `.${outFmt}`;
 
   const suffix = options.suffix || "-filey";
-  const outputPath = path.join(dir, `${baseName}${suffix}${outExt}`);
+  // Output directory: custom outputDir, or a subfolder, or same as source
+  let outputDir = dir;
+  if (options.outputDir && options.outputDir !== "same") {
+    if (options.outputDir === "subfolder") {
+      outputDir = path.join(dir, "Filey");
+      try { fs.mkdirSync(outputDir, { recursive: true }); } catch (_) {}
+    } else if (isPathAllowed(options.outputDir) || options.outputDir.startsWith(os.tmpdir())) {
+      outputDir = options.outputDir;
+      try { fs.mkdirSync(outputDir, { recursive: true }); } catch (_) {}
+    }
+  }
+  const outputPath = path.join(outputDir, `${baseName}${suffix}${outExt}`);
 
   // Determine if we need sharp (re-encoding) or can use exiftool (lossless metadata-only)
   const needsFormatChange = outFmt !== inputFormat && !(outFmt === "jpg" && inputFormat === "jpeg");
@@ -1468,7 +1479,7 @@ app.post("/api/file-info", async (req, res) => {
 
 // Process image (unified: convert, strip metadata, resize, target size)
 app.post("/api/process-image", async (req, res) => {
-  const { filePath, outputFormat, quality, stripMeta, resize, targetBytes, suffix, optimize } = req.body;
+  const { filePath, outputFormat, quality, stripMeta, resize, targetBytes, suffix, optimize, outputDir } = req.body;
   if (!filePath) return res.status(400).json({ error: "No file" });
   if (!isPathAllowed(filePath)) return res.status(403).json({ error: "Access denied" });
 
@@ -1485,6 +1496,7 @@ app.post("/api/process-image", async (req, res) => {
       targetBytes: Math.max(0, clampedTarget),
       suffix: safeSuffix,
       optimize: optimize !== false,
+      outputDir: outputDir || "same",
     });
     res.json({ results: [result], errors: [] });
   } catch (err) {
