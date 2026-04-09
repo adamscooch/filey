@@ -73,16 +73,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Draggable title bar region for Electron (macOS frameless window) */
-.titlebar-drag {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 38px;
-  -webkit-app-region: drag;
-  z-index: 9999;
-}
+/* Titlebar drag region is now integrated into .version-bar */
 
 /* ---- Container ---- */
 .container {
@@ -145,12 +136,23 @@ h1 {
 
 .version-bar {
   position: fixed;
-  top: 10px;
-  right: 16px;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 38px;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
+  padding: 0 16px;
   z-index: 10000;
+  -webkit-app-region: drag;
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--border);
+}
+
+.version-bar a,
+.version-bar .version-separator {
   -webkit-app-region: no-drag;
 }
 
