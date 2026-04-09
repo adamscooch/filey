@@ -2,7 +2,7 @@
 
 One free app to replace ImageOptim, HandBrake, Gifski, PDF Squeezer, and more. Local processing, no uploads, no subscriptions.
 
-![Filey Screenshot](https://img.shields.io/badge/macOS-arm64-blue) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/github/v/release/adamscooch/filey)
+[![Download Filey](https://img.shields.io/badge/Download-Filey%20for%20Mac-E8923A?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/adamscooch/filey/releases/latest/download/Filey-26.409.2-arm64.dmg) ![Version](https://img.shields.io/github/v/release/adamscooch/filey) ![macOS](https://img.shields.io/badge/macOS-arm64-blue) ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## What It Does
 

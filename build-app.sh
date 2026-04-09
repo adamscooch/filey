@@ -20,6 +20,7 @@ echo "Copying project files..."
 cp "$PROJECT_DIR/package.json" "$BUILD_DIR/"
 cp "$PROJECT_DIR/package-lock.json" "$BUILD_DIR/" 2>/dev/null || true
 cp "$PROJECT_DIR/electron-main.js" "$BUILD_DIR/"
+cp "$PROJECT_DIR/preload.js" "$BUILD_DIR/"
 cp "$PROJECT_DIR/server.js" "$BUILD_DIR/"
 cp "$PROJECT_DIR/afterPack.js" "$BUILD_DIR/"
 cp -R "$PROJECT_DIR/public" "$BUILD_DIR/"
