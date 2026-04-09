@@ -558,20 +558,29 @@ function renderResult(r, isSingleFile) {
     </div>`;
   }
 
-  return `<div class="result-card${r.warning ? ' result-warning' : ''}">
+  if (isSingleFile) {
+    // Full result card for single files (with comparison slider)
+    return `<div class="result-card${r.warning ? ' result-warning' : ''}">
+      <button class="results-close-btn" title="Close">&times;</button>
+      <div class="result-header">${escapeHtml(r.outputName)}</div>
+      <div class="result-savings ${savingsClass}">${savingsText}</div>
+      <div class="result-details">
+        <span>${origDisplay}</span>
+        <span class="arrow">&rarr;</span>
+        <span>${outDisplay}</span>
+      </div>
+      ${warningHtml}
+      ${comparisonHtml}
+      <button class="reveal-btn" data-path="${escapeAttr(r.savedTo)}">Show in Finder</button>
+    </div>`;
+  }
+
+  // Compact result row for batch mode
+  return `<div class="result-row${r.warning ? ' result-warning' : ''}">
     <button class="results-close-btn" title="Close">&times;</button>
-    <div class="result-header">${escapeHtml(r.outputName)}</div>
-    <div class="result-savings ${savingsClass}">${savingsText}</div>
-    <div class="result-details">
-      <span>${origDisplay}</span>
-      <span class="arrow">&rarr;</span>
-      <span>${outDisplay}</span>
-    </div>
-    ${dimsHtml}
-    ${warningHtml}
-    ${comparisonHtml}
-    <div class="saved-path">Saved to ${escapeHtml(shortenPath(r.savedTo))}</div>
-    <button class="reveal-btn" data-path="${escapeAttr(r.savedTo)}">Show in Finder</button>
+    <span class="result-row-name">${escapeHtml(r.outputName)}</span>
+    <span class="result-row-badge ${savingsClass}">${savingsText}</span>
+    <span class="result-row-size">${origDisplay} &rarr; ${outDisplay}</span>
   </div>`;
 }
 
