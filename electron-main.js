@@ -136,6 +136,70 @@ function checkForUpdates(manual) {
   request.end();
 }
 
+// --- Progress window (native, no preload needed) ---
+let progressWindow = null;
+
+function showProgressWindow(version) {
+  if (progressWindow) { progressWindow.close(); progressWindow = null; }
+  progressWindow = new BrowserWindow({
+    width: 360,
+    height: 140,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    closable: false,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    parent: mainWindow,
+    modal: true,
+    show: false,
+    webPreferences: { nodeIntegration: false, contextIsolation: true },
+  });
+
+  const html = `<!DOCTYPE html><html><head><style>
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: rgba(30,26,23,0.95); color: #fff; margin: 0; padding: 24px 28px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(20px); -webkit-app-region: drag; }
+    .title { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    .sub { font-size: 11px; color: rgba(255,255,255,0.6); margin-bottom: 14px; }
+    .bar-wrap { background: rgba(255,255,255,0.1); border-radius: 4px; height: 6px; overflow: hidden; }
+    .bar { height: 100%; width: 0%; background: #E8923A; border-radius: 4px; transition: width 0.2s ease; }
+    .pct { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 8px; text-align: right; font-variant-numeric: tabular-nums; }
+  </style></head><body>
+    <div class="title" id="title">Downloading Filey v${version}</div>
+    <div class="sub" id="sub">This will only take a moment...</div>
+    <div class="bar-wrap"><div class="bar" id="bar"></div></div>
+    <div class="pct" id="pct">0%</div>
+  </body></html>`;
+
+  progressWindow.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html));
+  progressWindow.once("ready-to-show", () => progressWindow.show());
+}
+
+function updateProgressWindow(percent) {
+  if (!progressWindow || progressWindow.isDestroyed()) return;
+  progressWindow.webContents.executeJavaScript(`
+    document.getElementById('bar').style.width = '${percent}%';
+    document.getElementById('pct').textContent = '${percent}%';
+  `).catch(() => {});
+}
+
+function updateProgressWindowText(title, sub) {
+  if (!progressWindow || progressWindow.isDestroyed()) return;
+  progressWindow.webContents.executeJavaScript(`
+    document.getElementById('title').textContent = ${JSON.stringify(title)};
+    document.getElementById('sub').textContent = ${JSON.stringify(sub)};
+    document.getElementById('bar').style.width = '100%';
+    document.getElementById('pct').textContent = '';
+  `).catch(() => {});
+}
+
+function closeProgressWindow() {
+  if (progressWindow && !progressWindow.isDestroyed()) {
+    progressWindow.close();
+  }
+  progressWindow = null;
+}
+
 function downloadAndInstall(zipUrl, version) {
   const tmpDir = path.join(app.getPath("temp"), "filey-update");
   const zipPath = path.join(tmpDir, "update.zip");
@@ -144,7 +208,8 @@ function downloadAndInstall(zipUrl, version) {
   try { fs.rmSync(tmpDir, { recursive: true }); } catch (_) {}
   fs.mkdirSync(tmpDir, { recursive: true });
 
-  sendUpdateStatus("downloading", { percent: 0 });
+  // Show progress window
+  showProgressWindow(version);
 
   // Download the ZIP using net module (follows redirects)
   const downloadFile = (url) => {
@@ -166,7 +231,7 @@ function downloadAndInstall(zipUrl, version) {
         chunks.push(chunk);
         receivedBytes += chunk.length;
         const percent = totalBytes > 0 ? Math.round((receivedBytes / totalBytes) * 100) : 0;
-        sendUpdateStatus("downloading", { percent });
+        updateProgressWindow(percent);
         if (mainWindow) mainWindow.setProgressBar(percent / 100);
       });
 
@@ -174,9 +239,10 @@ function downloadAndInstall(zipUrl, version) {
         try {
           fs.writeFileSync(zipPath, Buffer.concat(chunks));
           if (mainWindow) mainWindow.setProgressBar(-1);
+          closeProgressWindow();
           installUpdate(tmpDir, zipPath, version);
         } catch (err) {
-          sendUpdateStatus("error", { message: err.message });
+          closeProgressWindow();
           showUpdateError(err.message);
           cleanup(tmpDir);
         }
@@ -184,7 +250,7 @@ function downloadAndInstall(zipUrl, version) {
     });
 
     request.on("error", (err) => {
-      sendUpdateStatus("error", { message: err.message });
+      closeProgressWindow();
       showUpdateError(err.message);
       cleanup(tmpDir);
     });
@@ -253,8 +319,8 @@ open "${currentApp}"
         dialog.showMessageBox(mainWindow, {
           type: "info",
           title: "Update Ready",
-          message: `Filey v${version} is ready. The app will restart now.`,
-          buttons: ["Restart Now"],
+          message: `Filey v${version} is ready to install.`,
+          buttons: ["Restart Filey Now"],
         }).then(() => {
           // Launch the update script and quit
           execFile("/bin/bash", [updateScript], { detached: true, stdio: "ignore" }).unref();
