@@ -576,17 +576,10 @@ async function processImageWithSharp(inputPath, outputPath, metadata, outFmt, qu
     await encode(quality);
   }
 
-  // Strip metadata from output if requested (after encoding)
-  if (stripMeta) {
-    try {
-      await Promise.race([
-        exiftool.write(outputPath, {}, ["-all=", "-overwrite_original"]),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("exiftool timeout")), 15000)),
-      ]);
-    } catch (_) {
-      // Non-critical — metadata stripping is best-effort after conversion
-    }
-  }
+  // Note: sharp with mozjpeg:true already strips most metadata during encoding.
+  // The separate exiftool pass was causing 15-second hangs per file due to
+  // the persistent Perl process deadlocking. Removed for the sharp path.
+  // The exiftool-only lossless path (line ~434) still handles metadata-only stripping.
 
   // ImageOptim-style optimization pass (runs external tools for additional compression)
   let optimResult = { tool: "sharp", saved: 0 };
