@@ -280,6 +280,8 @@ class ToolCard {
           this.results.classList.add("hidden");
           this.dropzone.classList.remove("dropzone-mini");
           this.fileInput.value = "";
+          // Invalidate any in-flight estimates
+          estimateGeneration++;
         } else {
           const items = this.pendingFiles.map((f) => ({
             name: f.name,
@@ -287,6 +289,11 @@ class ToolCard {
             path: f.path,
           }));
           this.renderFileList(items);
+          // Reschedule estimate with updated file list
+          if (this.config.id === "tool-image-converter") scheduleEstimate();
+          if (this.config.id === "tool-video-converter") scheduleVideoEstimate();
+          if (this.config.id === "tool-gif-maker") scheduleGifEstimate();
+          if (this.config.id === "tool-pdf-compressor") schedulePdfEstimate();
         }
       });
     });
@@ -921,55 +928,51 @@ function getGifWidth() {
 
 // --- Comparison slider ---
 
-const _initializedSliders = new WeakSet();
+// Single delegated comparison slider handler (no per-container window listeners)
+let _activeSlider = null;
+
+function _updateSliderPosition(container, clientX) {
+  const rect = container.getBoundingClientRect();
+  let pct = ((clientX - rect.left) / rect.width) * 100;
+  pct = Math.max(0, Math.min(100, pct));
+  container.dataset.position = pct;
+  container.querySelector(".comp-after-wrap").style.clipPath = `inset(0 0 0 ${pct}%)`;
+  container.querySelector(".comparison-divider").style.left = `${pct}%`;
+  container.querySelector(".comparison-handle").style.left = `${pct}%`;
+}
+
+document.addEventListener("mousedown", (e) => {
+  const container = e.target.closest(".comparison-container");
+  if (!container) return;
+  e.preventDefault();
+  _activeSlider = container;
+  _updateSliderPosition(container, e.clientX);
+});
+
+window.addEventListener("mousemove", (e) => {
+  if (!_activeSlider) return;
+  e.preventDefault();
+  _updateSliderPosition(_activeSlider, e.clientX);
+});
+
+window.addEventListener("mouseup", () => { _activeSlider = null; });
+
+document.addEventListener("touchstart", (e) => {
+  const container = e.target.closest(".comparison-container");
+  if (!container) return;
+  _activeSlider = container;
+  _updateSliderPosition(container, e.touches[0].clientX);
+}, { passive: true });
+
+window.addEventListener("touchmove", (e) => {
+  if (!_activeSlider) return;
+  _updateSliderPosition(_activeSlider, e.touches[0].clientX);
+}, { passive: true });
+
+window.addEventListener("touchend", () => { _activeSlider = null; });
 
 function initComparisonSliders() {
-  document.querySelectorAll(".comparison-container").forEach((container) => {
-    if (_initializedSliders.has(container)) return;
-    _initializedSliders.add(container);
-
-    let dragging = false;
-
-    function updatePosition(clientX) {
-      const rect = container.getBoundingClientRect();
-      let pct = ((clientX - rect.left) / rect.width) * 100;
-      pct = Math.max(0, Math.min(100, pct));
-      container.dataset.position = pct;
-      container.querySelector(".comp-after-wrap").style.clipPath = `inset(0 0 0 ${pct}%)`;
-      container.querySelector(".comparison-divider").style.left = `${pct}%`;
-      container.querySelector(".comparison-handle").style.left = `${pct}%`;
-    }
-
-    container.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      dragging = true;
-      updatePosition(e.clientX);
-    });
-
-    window.addEventListener("mousemove", (e) => {
-      if (!dragging) return;
-      e.preventDefault();
-      updatePosition(e.clientX);
-    });
-
-    window.addEventListener("mouseup", () => {
-      dragging = false;
-    });
-
-    container.addEventListener("touchstart", (e) => {
-      dragging = true;
-      updatePosition(e.touches[0].clientX);
-    }, { passive: true });
-
-    window.addEventListener("touchmove", (e) => {
-      if (!dragging) return;
-      updatePosition(e.touches[0].clientX);
-    }, { passive: true });
-
-    window.addEventListener("touchend", () => {
-      dragging = false;
-    });
-  });
+  // No-op: delegated handlers above cover all comparison containers automatically
 }
 
 // --- Comparison modal ---

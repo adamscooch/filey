@@ -51,8 +51,6 @@ function getDisplayVersion() {
 function setupAutoUpdater() {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
-  // Skip code signing verification (app is ad-hoc signed, not Apple Developer ID)
-  autoUpdater.forceDevUpdateConfig = true;
 
   autoUpdater.on("update-available", (info) => {
     const ver = info.version || "unknown";

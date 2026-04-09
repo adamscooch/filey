@@ -26,6 +26,21 @@ BINARIES=(
   /opt/homebrew/bin/gs
 )
 
+# Resolve @rpath references to actual file paths
+resolve_rpath() {
+  local lib="$1"
+  local binary="$2"
+  local libname=$(basename "$lib")
+  local bindir=$(dirname "$binary")
+  # Try common rpath locations
+  for candidate in "$bindir/$libname" "$bindir/lib/$libname" "/opt/homebrew/lib/$libname" "/usr/local/lib/$libname"; do
+    if [ -f "$candidate" ]; then
+      echo "$candidate"
+      return
+    fi
+  done
+}
+
 # Recursively find all non-system dylibs a binary depends on
 find_dylibs() {
   local binary="$1"
@@ -34,19 +49,26 @@ find_dylibs() {
   otool -L "$binary" 2>/dev/null | tail -n +2 | awk '{print $1}' | while read -r lib; do
     # Skip system libraries (they exist on all macOS)
     case "$lib" in
-      /usr/lib/*|/System/*|@rpath/*|@loader_path/*|@executable_path/*) continue ;;
+      /usr/lib/*|/System/*|@loader_path/*|@executable_path/*) continue ;;
     esac
 
+    # Resolve @rpath references to real paths
+    local resolved="$lib"
+    if [[ "$lib" == @rpath/* ]]; then
+      resolved=$(resolve_rpath "$lib" "$binary")
+      if [ -z "$resolved" ]; then continue; fi
+    fi
+
     # Skip if already seen
-    if echo "$seen" | grep -qF "$lib"; then
+    if echo "$seen" | grep -qF "$resolved"; then
       continue
     fi
 
-    if [ -f "$lib" ]; then
-      echo "$lib"
+    if [ -f "$resolved" ]; then
+      echo "$resolved"
       # Recurse into this dylib's dependencies
-      find_dylibs "$lib" "$seen
-$lib"
+      find_dylibs "$resolved" "$seen
+$resolved"
     fi
   done
 }
@@ -64,10 +86,14 @@ copy_and_fix() {
   # Fix dylib references to point to ../lib/ (relative to binary)
   otool -L "$dest" 2>/dev/null | tail -n +2 | awk '{print $1}' | while read -r lib; do
     case "$lib" in
-      /usr/lib/*|/System/*|@rpath/*|@loader_path/*|@executable_path/*) continue ;;
+      /usr/lib/*|/System/*|@loader_path/*|@executable_path/*) continue ;;
     esac
     local libname=$(basename "$lib")
-    install_name_tool -change "$lib" "@loader_path/lib/$libname" "$dest" 2>/dev/null || true
+    if [[ "$lib" == @rpath/* ]]; then
+      install_name_tool -change "$lib" "@loader_path/lib/$libname" "$dest" 2>/dev/null || true
+    else
+      install_name_tool -change "$lib" "@loader_path/lib/$libname" "$dest" 2>/dev/null || true
+    fi
   done
 }
 
@@ -88,7 +114,7 @@ copy_and_fix_dylib() {
   # Fix references to other dylibs
   otool -L "$dest" 2>/dev/null | tail -n +2 | awk '{print $1}' | while read -r lib; do
     case "$lib" in
-      /usr/lib/*|/System/*|@rpath/*|@loader_path/*|@executable_path/*) continue ;;
+      /usr/lib/*|/System/*|@loader_path/*|@executable_path/*) continue ;;
     esac
     local libname=$(basename "$lib")
     install_name_tool -change "$lib" "@loader_path/$libname" "$dest" 2>/dev/null || true
@@ -171,12 +197,23 @@ for pass in $(seq 1 $MAX_PASSES); do
     [ -f "$dylib" ] || continue
     otool -L "$dylib" 2>/dev/null | tail -n +2 | awk '{print $1}' | while read -r lib; do
       case "$lib" in
-        /usr/lib/*|/System/*|@rpath/*|@loader_path/*|@executable_path/*) continue ;;
+        /usr/lib/*|/System/*|@loader_path/*|@executable_path/*) continue ;;
       esac
-      libname=$(basename "$lib")
-      if [ ! -f "$DEST/lib/$libname" ] && [ -f "$lib" ]; then
+      # Resolve @rpath to actual path
+      local_lib="$lib"
+      if [[ "$lib" == @rpath/* ]]; then
+        libname=$(basename "$lib")
+        local_lib=$(resolve_rpath "$lib" "$dylib")
+        if [ -z "$local_lib" ]; then continue; fi
+      else
+        libname=$(basename "$lib")
+        local_lib="$lib"
+      fi
+      if [ ! -f "$DEST/lib/$libname" ] && [ -f "$local_lib" ]; then
         echo "  TRANSITIVE: $libname (pass $pass)"
-        copy_and_fix_dylib "$lib"
+        copy_and_fix_dylib "$local_lib"
+        # Also rewrite the @rpath reference in the referring dylib
+        install_name_tool -change "$lib" "@loader_path/$libname" "$dylib" 2>/dev/null || true
         found_new=true
       fi
     done

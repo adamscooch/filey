@@ -111,10 +111,13 @@ function deepFindFile(fileName, fileSize) {
 
 function mdfindByExactName(fileName) {
   return new Promise((resolve) => {
-    // Escape single quotes in filename to prevent Spotlight query injection
-    const escaped = fileName.replace(/'/g, "'\\''");
+    // Escape single quotes for Spotlight query (execFile doesn't use shell,
+    // but the Spotlight query language itself interprets single quotes)
+    const escaped = fileName.replace(/'/g, "\\'");
     execFile("mdfind", [`kMDItemFSName == '${escaped}'`], (err, stdout) => {
-      resolve((!err && stdout) ? stdout.trim().split("\n").filter(Boolean) : []);
+      if (err) return resolve({ candidates: [], error: err.message });
+      const candidates = stdout ? stdout.trim().split("\n").filter(Boolean) : [];
+      resolve({ candidates, error: null });
     });
   });
 }
@@ -122,7 +125,9 @@ function mdfindByExactName(fileName) {
 function mdfindByName(fileName) {
   return new Promise((resolve) => {
     execFile("mdfind", ["-name", fileName], (err, stdout) => {
-      resolve((!err && stdout) ? stdout.trim().split("\n").filter(Boolean) : []);
+      if (err) return resolve({ candidates: [], error: err.message });
+      const candidates = stdout ? stdout.trim().split("\n").filter(Boolean) : [];
+      resolve({ candidates, error: null });
     });
   });
 }
@@ -146,15 +151,15 @@ async function findFileOnDisk(fileName, fileSize) {
   if (foundAny) return foundAny;
 
   // 2. MEDIUM: Spotlight search (fast index-based)
-  let candidates = await mdfindByExactName(fileName);
-  let sizeMatch = matchBySize(candidates, fileSize);
+  let result = await mdfindByExactName(fileName);
+  let sizeMatch = matchBySize(result.candidates, fileSize);
   if (sizeMatch) return sizeMatch;
-  if (candidates.length > 0) return candidates[0];
+  if (result.candidates.length > 0) return result.candidates[0];
 
-  candidates = await mdfindByName(fileName);
-  sizeMatch = matchBySize(candidates, fileSize);
+  result = await mdfindByName(fileName);
+  sizeMatch = matchBySize(result.candidates, fileSize);
   if (sizeMatch) return sizeMatch;
-  if (candidates.length > 0) return candidates[0];
+  if (result.candidates.length > 0) return result.candidates[0];
 
   // 3. SLOW: deep filesystem search (last resort)
   const deepFound = await deepFindFile(fileName, fileSize);
