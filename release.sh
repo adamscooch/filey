@@ -85,14 +85,13 @@ echo "=== Step 4: Create GitHub Release ==="
 gh release delete "v${DISPLAY_VERSION}" --yes 2>/dev/null || true
 
 # Find the actual filenames (they use semver)
-DMG=$(ls "$PROJECT_DIR/dist/"*.dmg 2>/dev/null | head -1)
-ZIP=$(ls "$PROJECT_DIR/dist/"*.zip 2>/dev/null | head -1)
-YML=$(ls "$PROJECT_DIR/dist/"latest-mac.yml 2>/dev/null | head -1)
+# Only upload DMG (for users) and ZIP (for auto-updater). Skip yml and blockmaps.
+DMG=$(ls "$PROJECT_DIR/dist/"*.dmg 2>/dev/null | grep -v blockmap | head -1)
+ZIP=$(ls "$PROJECT_DIR/dist/"*-mac.zip 2>/dev/null | grep -v blockmap | head -1)
 
 ASSETS=()
 [ -f "$DMG" ] && ASSETS+=("$DMG")
 [ -f "$ZIP" ] && ASSETS+=("$ZIP")
-[ -f "$YML" ] && ASSETS+=("$YML")
 
 # Generate changelog from commits since last tag
 PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
