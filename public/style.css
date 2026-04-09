@@ -64,6 +64,7 @@ body {
   color: var(--text-secondary);
   height: 100vh;
   overflow: hidden;
+  scrollbar-width: none;
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -1062,21 +1063,29 @@ h1 {
   }
 }
 
-/* ---- Scrollbar (Webkit) ---- */
-::-webkit-scrollbar {
+/* ---- Scrollbar (Webkit) — hidden on body, styled on content areas ---- */
+body::-webkit-scrollbar {
+  display: none;
+}
+
+.tool-results::-webkit-scrollbar,
+.transcript-box::-webkit-scrollbar {
   width: 6px;
 }
 
-::-webkit-scrollbar-track {
+.tool-results::-webkit-scrollbar-track,
+.transcript-box::-webkit-scrollbar-track {
   background: transparent;
 }
 
-::-webkit-scrollbar-thumb {
+.tool-results::-webkit-scrollbar-thumb,
+.transcript-box::-webkit-scrollbar-thumb {
   background: var(--text-faint);
   border-radius: 3px;
 }
 
-::-webkit-scrollbar-thumb:hover {
+.tool-results::-webkit-scrollbar-thumb:hover,
+.transcript-box::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
 

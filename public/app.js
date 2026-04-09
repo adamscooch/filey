@@ -1735,12 +1735,12 @@ fetch("/api/version").then(r => r.json()).then(d => {
 
 // --- Check for updates button ---
 document.getElementById("check-for-updates")?.addEventListener("click", () => {
-  if (window.fileyUpdater) {
-    window.fileyUpdater.checkForUpdates();
-  } else {
-    // Running in browser, not Electron
-    window.open("https://github.com/adamscooch/filey/releases/latest", "_blank");
-  }
+  fetch("/api/check-updates", { method: "POST" })
+    .then(r => r.json())
+    .then(d => {
+      if (!d.ok) window.open("https://github.com/adamscooch/filey/releases/latest", "_blank");
+    })
+    .catch(() => {});
 });
 
 // --- Update overlay (Electron only) ---

@@ -1863,6 +1863,15 @@ app.get("/api/version", (req, res) => {
   res.json({ version: APP_VERSION });
 });
 
+app.post("/api/check-updates", (req, res) => {
+  if (global.fileyCheckForUpdates) {
+    global.fileyCheckForUpdates();
+    res.json({ ok: true });
+  } else {
+    res.json({ ok: false, message: "Update check only available in Electron" });
+  }
+});
+
 app.get("/api/status", (req, res) => {
   const tools = {
     // Core

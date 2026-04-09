@@ -419,6 +419,9 @@ app.whenReady().then(() => {
     checkForUpdates(true);
   });
 
+  // Expose checkForUpdates globally so Express can trigger it
+  global.fileyCheckForUpdates = () => checkForUpdates(true);
+
   setTimeout(() => {
     buildMenu();
     createWindow();
