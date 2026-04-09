@@ -175,7 +175,8 @@ function showProgressWindow(version) {
   });
 
   const html = `<!DOCTYPE html><html><head><style>
-    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: rgba(30,26,23,0.95); color: #fff; margin: 0; padding: 24px 28px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(20px); -webkit-app-region: drag; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: rgba(30,26,23,0.95); color: #fff; margin: 0; padding: 24px 28px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(20px); -webkit-app-region: drag; overflow: hidden; }
+    body::-webkit-scrollbar { display: none; }
     .title { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
     .sub { font-size: 11px; color: rgba(255,255,255,0.6); margin-bottom: 14px; }
     .bar-wrap { background: rgba(255,255,255,0.1); border-radius: 4px; height: 6px; overflow: hidden; }
@@ -254,7 +255,7 @@ function downloadAndInstall(zipUrl, version) {
         try {
           fs.writeFileSync(zipPath, Buffer.concat(chunks));
           if (mainWindow) mainWindow.setProgressBar(-1);
-          closeProgressWindow();
+          updateProgressWindowText("Installing update...", "Extracting and verifying...");
           installUpdate(tmpDir, zipPath, version);
         } catch (err) {
           closeProgressWindow();
@@ -334,7 +335,7 @@ rm -rf "${tmpDir}"
 open "${currentApp}"
 `, { mode: 0o755 });
 
-        sendUpdateStatus("restarting");
+        closeProgressWindow();
 
         dialog.showMessageBox(mainWindow, {
           type: "info",
