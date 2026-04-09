@@ -167,7 +167,7 @@ function showProgressWindow(version) {
     transparent: true,
     alwaysOnTop: true,
     parent: mainWindow,
-    modal: true,
+    modal: false,
     show: false,
     webPreferences: { nodeIntegration: false, contextIsolation: true },
   });
@@ -319,8 +319,10 @@ function installUpdate(tmpDir, zipPath, version) {
       return;
     }
 
-    // Write a shell script that handles xattr stripping, codesign, app replacement, and relaunch
-    // This runs AFTER the app quits so it doesn't block the UI
+    // User already consented by clicking "Download & Install"
+    // Skip the restart dialog -- just quit and replace immediately
+    updateProgressWindowText("Restarting Filey...", "");
+
     const updateScript = path.join(tmpDir, "apply-update.sh");
     fs.writeFileSync(updateScript, `#!/bin/bash
 # Wait for the app to fully quit
@@ -340,19 +342,9 @@ rm -rf "${tmpDir}"
 open "${currentApp}"
 `, { mode: 0o755 });
 
-    closeProgressWindow();
-
-    dialog.showMessageBox(mainWindow, {
-      type: "info",
-      title: "Update Ready",
-      message: `Filey v${version} is ready to install.`,
-      buttons: ["Restart Filey Now"],
-    }).then(() => {
-      execFile("/bin/bash", [updateScript], { detached: true, stdio: "ignore" }).unref();
-      // app.quit() doesn't force-kill (Express server keeps process alive)
-      // app.exit() terminates immediately so the shell script can replace the .app
-      setTimeout(() => app.exit(0), 500);
-    });
+    // Launch update script and exit immediately
+    execFile("/bin/bash", [updateScript], { detached: true, stdio: "ignore" }).unref();
+    setTimeout(() => app.exit(0), 500);
   });
 }
 
