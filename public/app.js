@@ -1742,44 +1742,57 @@ if (window.fileyUpdater) {
   const content = document.createElement("div");
   content.className = "update-overlay-content";
 
+  const spinner = document.createElement("div");
+  spinner.className = "update-spinner";
+
+  const ring = document.createElement("div");
+  ring.className = "update-spinner-ring";
+
+  const pctEl = document.createElement("div");
+  pctEl.className = "update-spinner-percent";
+  pctEl.id = "update-overlay-pct";
+
+  spinner.appendChild(ring);
+  spinner.appendChild(pctEl);
+
   const textEl = document.createElement("div");
   textEl.className = "update-overlay-text";
   textEl.id = "update-overlay-text";
-  textEl.textContent = "Checking for updates...";
 
-  const barWrap = document.createElement("div");
-  barWrap.className = "update-overlay-bar-wrap";
+  const subEl = document.createElement("div");
+  subEl.className = "update-overlay-subtext";
+  subEl.id = "update-overlay-sub";
 
-  const barEl = document.createElement("div");
-  barEl.className = "update-overlay-bar";
-  barEl.id = "update-overlay-bar";
-
-  barWrap.appendChild(barEl);
+  content.appendChild(spinner);
   content.appendChild(textEl);
-  content.appendChild(barWrap);
+  content.appendChild(subEl);
   overlay.appendChild(content);
   document.body.appendChild(overlay);
 
   window.fileyUpdater.onUpdateStatus((data) => {
     const text = document.getElementById("update-overlay-text");
-    const bar = document.getElementById("update-overlay-bar");
-    if (!text || !bar) return;
+    const pct = document.getElementById("update-overlay-pct");
+    const sub = document.getElementById("update-overlay-sub");
+    if (!text) return;
 
     switch (data.status) {
       case "downloading":
         overlay.classList.remove("hidden");
-        text.textContent = "Downloading update... " + (data.percent || 0) + "%";
-        bar.style.width = (data.percent || 0) + "%";
+        pct.textContent = (data.percent || 0) + "%";
+        text.textContent = "Updating Filey";
+        sub.textContent = "Downloading new version...";
         break;
       case "installing":
         overlay.classList.remove("hidden");
-        text.textContent = "Installing update...";
-        bar.style.width = "100%";
+        pct.textContent = "";
+        text.textContent = "Installing update";
+        sub.textContent = "Almost there...";
         break;
       case "restarting":
         overlay.classList.remove("hidden");
-        text.textContent = "Restarting...";
-        bar.style.width = "100%";
+        pct.textContent = "";
+        text.textContent = "Restarting";
+        sub.textContent = "";
         break;
       case "error":
         overlay.classList.add("hidden");
